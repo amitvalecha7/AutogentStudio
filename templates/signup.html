@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - Autogent Studio</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .signup-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+        .brand-logo {
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-control {
+            border-radius: 10px;
+            padding: 12px 15px;
+            border: 2px solid #f0f0f0;
+            transition: border-color 0.3s ease;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-weight: 600;
+            transition: transform 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+        }
+        .social-btn {
+            border: 2px solid #f0f0f0;
+            border-radius: 10px;
+            padding: 12px;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+        .social-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        .feature-list {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 30px;
+        }
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .feature-item i {
+            color: #667eea;
+            margin-right: 10px;
+        }
+        .password-strength {
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        .password-strength-bar {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        .strength-weak { background: #dc3545; }
+        .strength-medium { background: #ffc107; }
+        .strength-strong { background: #28a745; }
+    </style>
+</head>
+<body>
+    <div class="signup-container">
+        <div class="brand-logo">
+            <i class="fas fa-brain"></i>
+            <br>
+            <h3 class="mt-2">Autogent Studio</h3>
+        </div>
+        
+        <h4 class="text-center mb-4">Create Your Account</h4>
+        <p class="text-center text-muted mb-4">Join the future of AI development</p>
+        
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="row mb-3">
+            <div class="col-4">
+                <button class="btn social-btn w-100">
+                    <i class="fab fa-apple"></i>
+                    <br><small>Apple</small>
+                </button>
+            </div>
+            <div class="col-4">
+                <button class="btn social-btn w-100">
+                    <i class="fab fa-github"></i>
+                    <br><small>GitHub</small>
+                </button>
+            </div>
+            <div class="col-4">
+                <button class="btn social-btn w-100">
+                    <i class="fab fa-google"></i>
+                    <br><small>Google</small>
+                </button>
+            </div>
+        </div>
+        
+        <div class="text-center my-3">
+            <span class="text-muted">or</span>
+        </div>
+        
+        <form method="POST" id="signupForm">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <input type="text" class="form-control" name="first_name" placeholder="First Name">
+                </div>
+                <div class="col-md-6">
+                    <input type="text" class="form-control" name="last_name" placeholder="Last Name">
+                </div>
+            </div>
+            <div class="mb-3">
+                <input type="email" class="form-control" name="email" placeholder="Email Address" required>
+            </div>
+            <div class="mb-3">
+                <input type="text" class="form-control" name="username" placeholder="Username" required>
+            </div>
+            <div class="mb-3">
+                <input type="password" class="form-control" name="password" placeholder="Password" required id="passwordInput">
+                <div class="password-strength">
+                    <div class="password-strength-bar" id="strengthBar"></div>
+                </div>
+                <small class="text-muted" id="strengthText">Password strength: Weak</small>
+            </div>
+            <div class="mb-3">
+                <input type="password" class="form-control" name="confirm_password" placeholder="Confirm Password" required>
+            </div>
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="acceptTerms" required>
+                <label class="form-check-label" for="acceptTerms">
+                    I accept the <a href="#" class="text-decoration-none">Terms of Service</a> and <a href="#" class="text-decoration-none">Privacy Policy</a>
+                </label>
+            </div>
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="newsletter">
+                <label class="form-check-label" for="newsletter">
+                    Send me updates about new AI features and quantum computing advances
+                </label>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="fas fa-user-plus me-2"></i>
+                Create Account
+            </button>
+        </form>
+        
+        <div class="text-center mt-4">
+            <p class="text-muted">
+                Already have an account? 
+                <a href="{{ url_for('signin') }}" class="text-decoration-none">Sign in</a>
+            </p>
+        </div>
+        
+        <div class="feature-list">
+            <h6 class="mb-3"><i class="fas fa-star text-warning me-2"></i>What you'll get:</h6>
+            <div class="feature-item">
+                <i class="fas fa-atom"></i>
+                <span>Quantum Computing Integration</span>
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-network-wired"></i>
+                <span>Federated Learning Platform</span>
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-microchip"></i>
+                <span>Neuromorphic AI Development</span>
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-shield-alt"></i>
+                <span>AI Safety & Alignment Tools</span>
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-rocket"></i>
+                <span>Self-Improving AI Systems</span>
+            </div>
+        </div>
+        
+        <div class="text-center mt-4">
+            <small class="text-muted">
+                <a href="#" class="text-decoration-none me-3">Help</a>
+                <a href="#" class="text-decoration-none me-3">Privacy</a>
+                <a href="#" class="text-decoration-none">Terms</a>
+            </small>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Password strength checker
+        document.getElementById('passwordInput').addEventListener('input', function() {
+            const password = this.value;
+            const strengthBar = document.getElementById('strengthBar');
+            const strengthText = document.getElementById('strengthText');
+            
+            let strength = 0;
+            let strengthLabel = 'Weak';
+            let strengthClass = 'strength-weak';
+            
+            if (password.length >= 8) strength += 1;
+            if (password.match(/[a-z]/)) strength += 1;
+            if (password.match(/[A-Z]/)) strength += 1;
+            if (password.match(/[0-9]/)) strength += 1;
+            if (password.match(/[^a-zA-Z0-9]/)) strength += 1;
+            
+            if (strength >= 3) {
+                strengthLabel = 'Medium';
+                strengthClass = 'strength-medium';
+            }
+            if (strength >= 4) {
+                strengthLabel = 'Strong';
+                strengthClass = 'strength-strong';
+            }
+            
+            strengthBar.style.width = (strength * 20) + '%';
+            strengthBar.className = 'password-strength-bar ' + strengthClass;
+            strengthText.textContent = 'Password strength: ' + strengthLabel;
+        });
+        
+        // Form validation
+        document.getElementById('signupForm').addEventListener('submit', function(e) {
+            const password = document.querySelector('input[name="password"]').value;
+            const confirmPassword = document.querySelector('input[name="confirm_password"]').value;
+            
+            if (password !== confirmPassword) {
+                e.preventDefault();
+                alert('Passwords do not match');
+            }
+        });
+    </script>
+</body>
+</html>

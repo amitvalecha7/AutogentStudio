@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Autogent Studio{% endblock %}
+
+{% block content %}
+<div class="row h-100">
+    <!-- Chat Sidebar -->
+    <div class="col-md-3 border-end bg-secondary h-100">
+        <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
+            <h5 class="mb-0">
+                <i class="fas fa-comments me-2"></i>Conversations
+            </h5>
+            <button class="btn btn-primary btn-sm" onclick="createNewChat()">
+                <i class="fas fa-plus"></i>
+            </button>
+        </div>
+        
+        <div id="chatList" class="list-group list-group-flush">
+            {% for chat in chats %}
+                <a href="{{ url_for('chat.chat_session', chat_id=chat.id) }}" 
+                   class="list-group-item list-group-item-action bg-secondary text-light border-secondary {% if chat.id == current_chat_id %}active{% endif %}">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">{{ chat.title }}</h6>
+                        <small>{{ chat.updated_at.strftime('%m/%d') }}</small>
+                    </div>
+                    <p class="mb-1 text-muted">{{ chat.model }}</p>
+                    <div class="d-flex justify-content-between">
+                        <small class="text-muted">{{ chat.messages|length }} messages</small>
+                        <div>
+                            <button class="btn btn-sm btn-outline-light" onclick="editChat('{{ chat.id }}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteChat('{{ chat.id }}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Chat Area -->
+    <div class="col-md-9 d-flex flex-column">
+        <!-- Chat Header -->
+        <div class="bg-primary text-white p-3 border-bottom">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0">
+                        <i class="fas fa-robot me-2"></i>Autogent Studio AI
+                    </h4>
+                    <small class="text-light">Advanced AI with quantum computing capabilities</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <div class="dropdown">
+                        <button class="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-brain me-1"></i>GPT-4o
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="switchModel('gpt-4o')">GPT-4o</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="switchModel('claude-sonnet-4')">Claude Sonnet 4</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="switchModel('gemini-pro')">Gemini Pro</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="switchModel('quantum-enhanced')">
+                                <i class="fas fa-atom me-1"></i>Quantum Enhanced
+                            </a></li>
+                        </ul>
+                    </div>
+                    <button class="btn btn-outline-light" onclick="exportChat()">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button class="btn btn-outline-light" onclick="shareChat()">
+                        <i class="fas fa-share"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chat Messages -->
+        <div id="chatMessages" class="flex-grow-1 p-3 overflow-auto">
+            <div id="messageContainer">
+                <!-- Messages will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Chat Input -->
+        <div class="border-top p-3">
+            <div class="input-group">
+                <input type="text" id="messageInput" class="form-control form-control-lg bg-dark text-light border-secondary" 
+                       placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+                <button class="btn btn-primary" type="button" onclick="sendMessage()">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" onclick="uploadFile()">
+                            <i class="fas fa-file me-2"></i>Upload File
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="toggleTerminal()">
+                            <i class="fas fa-terminal me-2"></i>Terminal
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="generateImage()">
+                            <i class="fas fa-image me-2"></i>Generate Image
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="useKnowledgeBase()">
+                            <i class="fas fa-database me-2"></i>Knowledge Base
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="mt-2 d-flex justify-content-between align-items-center">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Use @ for knowledge bases, # for quantum computing, ! for terminal
+                </small>
+                <div class="d-flex gap-2">
+                    <span class="badge bg-success" id="connectionStatus">Connected</span>
+                    <span class="badge bg-info" id="typingIndicator" style="display: none;">AI is typing...</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Terminal Panel -->
+        <div id="terminalPanel" class="border-top bg-dark p-3" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">
+                    <i class="fas fa-terminal me-2"></i>Plandex Terminal
+                </h6>
+                <button class="btn btn-sm btn-outline-light" onclick="toggleTerminal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="terminal" class="bg-black text-light p-3 rounded font-monospace" style="height: 200px; overflow-y: auto;">
+                <div class="text-success">$ Welcome to Plandex Terminal - AI-powered development assistant</div>
+                <div class="text-muted">Type 'help' for available commands</div>
+            </div>
+            <div class="input-group mt-2">
+                <span class="input-group-text bg-dark text-success border-secondary">$</span>
+                <input type="text" id="terminalInput" class="form-control bg-dark text-light border-secondary" 
+                       placeholder="Enter command..." onkeypress="handleTerminalKeyPress(event)">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Image Generation Modal -->
+<div class="modal fade" id="imageGenerationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-image me-2"></i>Generate Image
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Image Prompt</label>
+                    <textarea id="imagePrompt" class="form-control bg-dark text-light border-secondary" 
+                              rows="3" placeholder="Describe the image you want to generate..."></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Model</label>
+                    <select id="imageModel" class="form-select bg-dark text-light border-secondary">
+                        <option value="dall-e-3">DALL-E 3</option>
+                        <option value="midjourney">Midjourney</option>
+                        <option value="neuromorphic-enhanced">Neuromorphic Enhanced</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="handleImageGeneration()">Generate</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Knowledge Base Modal -->
+<div class="modal fade" id="knowledgeBaseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-database me-2"></i>Select Knowledge Base
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="knowledgeBaseList" class="list-group">
+                    <!-- Knowledge bases will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- File Upload Modal -->
+<div class="modal fade" id="fileUploadModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload File</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="file" id="fileInput" class="form-control bg-dark text-light border-secondary" multiple>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        Supported formats: PDF, DOC, TXT, Images, Audio, Video
+                    </small>
+                </div>
+                <div id="uploadProgress" class="mt-3" style="display: none;">
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="handleFileUpload()">Upload</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/terminal.js') }}"></script>
+{% endblock %}
+

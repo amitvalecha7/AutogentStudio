@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Autogent Studio{% endblock %}
+
+{% block head %}
+<style>
+    .chat-container {
+        height: calc(100vh - 120px);
+        display: flex;
+    }
+    
+    .sidebar {
+        width: 300px;
+        background: var(--bs-gray-900);
+        border-right: 1px solid var(--bs-border-color);
+        overflow-y: auto;
+    }
+    
+    .chat-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        background: var(--bs-body-bg);
+    }
+    
+    .message {
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    
+    .message.user {
+        flex-direction: row-reverse;
+    }
+    
+    .message-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+    
+    .user .message-avatar {
+        background: var(--bs-primary);
+        color: white;
+    }
+    
+    .assistant .message-avatar {
+        background: var(--bs-success);
+        color: white;
+    }
+    
+    .message-content {
+        background: var(--bs-gray-800);
+        border-radius: 1rem;
+        padding: 0.75rem 1rem;
+        max-width: 70%;
+        word-wrap: break-word;
+    }
+    
+    .user .message-content {
+        background: var(--bs-primary);
+        color: white;
+    }
+    
+    .chat-input {
+        padding: 1rem;
+        border-top: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+    }
+    
+    .conversation-item {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--bs-border-color);
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .conversation-item:hover {
+        background: var(--bs-gray-800);
+    }
+    
+    .conversation-item.active {
+        background: var(--bs-primary);
+    }
+    
+    .conversation-title {
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+    }
+    
+    .conversation-time {
+        font-size: 0.8rem;
+        opacity: 0.7;
+    }
+    
+    .typing-indicator {
+        display: none;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--bs-text-muted);
+        font-style: italic;
+    }
+    
+    .typing-dots {
+        display: flex;
+        gap: 0.25rem;
+    }
+    
+    .typing-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--bs-text-muted);
+        animation: typing 1.5s infinite;
+    }
+    
+    .typing-dot:nth-child(2) {
+        animation-delay: 0.3s;
+    }
+    
+    .typing-dot:nth-child(3) {
+        animation-delay: 0.6s;
+    }
+    
+    @keyframes typing {
+        0%, 80%, 100% {
+            opacity: 0.3;
+        }
+        40% {
+            opacity: 1;
+        }
+    }
+    
+    .model-selector {
+        padding: 1rem;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="model-selector">
+            <label for="modelSelect" class="form-label small text-muted">AI Model</label>
+            <select class="form-select form-select-sm" id="modelSelect">
+                <option value="openai:gpt-4o">GPT-4o (OpenAI)</option>
+                <option value="anthropic:claude-sonnet-4-20250514">Claude Sonnet 4 (Anthropic)</option>
+                <option value="openai:gpt-3.5-turbo">GPT-3.5 Turbo (OpenAI)</option>
+                <option value="google:gemini-pro">Gemini Pro (Google)</option>
+            </select>
+        </div>
+        
+        <div class="p-3">
+            <button class="btn btn-primary w-100 mb-3" id="newChatBtn">
+                <i class="fas fa-plus me-2"></i>New Chat
+            </button>
+        </div>
+        
+        <div class="conversations" id="conversationsList">
+            {% for conv in conversations %}
+            <div class="conversation-item {{ 'active' if conversation and conv.id == conversation.id else '' }}" 
+                 data-conversation-id="{{ conv.id }}">
+                <div class="conversation-title">{{ conv.title or 'New Conversation' }}</div>
+                <div class="conversation-time">{{ conv.updated_at.strftime('%m/%d %H:%M') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Main Chat Area -->
+    <div class="chat-main">
+        <div class="chat-messages" id="chatMessages">
+            {% if conversation and messages %}
+                {% for message in messages %}
+                <div class="message {{ message.role }}">
+                    <div class="message-avatar">
+                        {% if message.role == 'user' %}
+                        <i class="fas fa-user"></i>
+                        {% else %}
+                        <i class="fas fa-robot"></i>
+                        {% endif %}
+                    </div>
+                    <div class="message-content">
+                        {{ message.content | safe }}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="d-flex align-items-center justify-content-center h-100">
+                <div class="text-center">
+                    <i class="fas fa-comments fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">Welcome to Autogent Studio Chat</h4>
+                    <p class="text-muted">
+                        Start a conversation with our advanced AI models.<br>
+                        Select a model above and type your message below.
+                    </p>
+                    <div class="row g-2 mt-4">
+                        <div class="col-md-6">
+                            <div class="card bg-secondary text-white h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-lightbulb fa-2x mb-2"></i>
+                                    <h6>Get Ideas</h6>
+                                    <small>Brainstorm creative solutions</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-info text-white h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-code fa-2x mb-2"></i>
+                                    <h6>Write Code</h6>
+                                    <small>Generate and debug code</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-success text-white h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-question fa-2x mb-2"></i>
+                                    <h6>Ask Questions</h6>
+                                    <small>Get detailed explanations</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-warning text-dark h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-pen fa-2x mb-2"></i>
+                                    <h6>Write Content</h6>
+                                    <small>Create articles and stories</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="message-avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="d-flex align-items-center">
+                    <span class="me-2">AI is thinking</span>
+                    <div class="typing-dots">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input">
+            <form id="chatForm">
+                <div class="input-group">
+                    <textarea class="form-control" id="messageInput" rows="1" 
+                              placeholder="Type your message here..." 
+                              style="resize: none; overflow-y: hidden;"></textarea>
+                    <button class="btn btn-primary" type="submit" id="sendBtn">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script>
+// Initialize chat functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const chatMessages = document.getElementById('chatMessages');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const chatForm = document.getElementById('chatForm');
+    const newChatBtn = document.getElementById('newChatBtn');
+    const modelSelect = document.getElementById('modelSelect');
+    const typingIndicator = document.getElementById('typingIndicator');
+    
+    let currentConversationId = {{ conversation.id if conversation else 'null' }};
+    
+    // Auto-resize textarea
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+    
+    // Handle form submission
+    chatForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        sendMessage();
+    });
+    
+    // Handle Enter key (without Shift)
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    // Send message function
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message) return;
+        
+        // Create new conversation if needed
+        if (!currentConversationId) {
+            try {
+                const formData = new FormData();
+                formData.append('title', 'New Conversation');
+                formData.append('model_provider', modelSelect.value.split(':')[0]);
+                formData.append('model_name', modelSelect.value.split(':')[1]);
+                
+                const response = await fetch('{{ url_for("chat.new_conversation") }}', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.redirected) {
+                    window.location.href = response.url;
+                    return;
+                }
+            } catch (error) {
+                console.error('Error creating conversation:', error);
+                return;
+            }
+        }
+        
+        // Add user message to UI
+        addMessage('user', message);
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        
+        // Show typing indicator
+        showTypingIndicator();
+        
+        // Send to backend
+        try {
+            const response = await fetch('{{ url_for("chat.send_message") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    conversation_id: currentConversationId,
+                    content: message
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // Add AI response to UI
+            addMessage('assistant', data.ai_message.content);
+            
+            // Update conversation title if provided
+            if (data.conversation_title) {
+                updateConversationTitle(data.conversation_title);
+            }
+            
+        } catch (error) {
+            console.error('Error sending message:', error);
+            addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+        } finally {
+            hideTypingIndicator();
+        }
+    }
+    
+    // Add message to chat
+    function addMessage(role, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${role}`;
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        avatar.innerHTML = role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        messageContent.textContent = content;
+        
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(messageContent);
+        
+        // Insert before typing indicator
+        chatMessages.insertBefore(messageDiv, typingIndicator);
+        scrollToBottom();
+    }
+    
+    // Show/hide typing indicator
+    function showTypingIndicator() {
+        typingIndicator.style.display = 'flex';
+        scrollToBottom();
+    }
+    
+    function hideTypingIndicator() {
+        typingIndicator.style.display = 'none';
+    }
+    
+    // Scroll to bottom
+    function scrollToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    // Update conversation title in sidebar
+    function updateConversationTitle(title) {
+        const activeConversation = document.querySelector('.conversation-item.active .conversation-title');
+        if (activeConversation) {
+            activeConversation.textContent = title;
+        }
+    }
+    
+    // Handle conversation selection
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const conversationId = this.dataset.conversationId;
+            window.location.href = `{{ url_for('chat.chat_conversation', conversation_id=0) }}`.replace('0', conversationId);
+        });
+    });
+    
+    // Handle new chat button
+    newChatBtn.addEventListener('click', function() {
+        window.location.href = '{{ url_for("chat.chat_index") }}';
+    });
+    
+    // Auto-scroll to bottom on page load
+    if (chatMessages.children.length > 1) {
+        scrollToBottom();
+    }
+});
+</script>
+{% endblock %}

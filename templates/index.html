@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+
+{% block title %}Autogent Studio - The Ultimate Enterprise AI Development Platform{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="hero-section text-center py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="hero-logo mb-4">
+                    <svg width="80" height="80" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="32" height="32" rx="8" fill="#6d73db"/>
+                        <path d="M8 16a8 8 0 1 1 16 0A8 8 0 0 1 8 16" fill="#8f96ff"/>
+                        <path d="M12 12h8v8h-8z" fill="#fff"/>
+                    </svg>
+                </div>
+                <h1 class="display-3 fw-bold text-primary mb-4">Autogent Studio</h1>
+                <p class="lead mb-4">The ultimate enterprise-grade AI development platform with quantum computing, neuromorphic edge AI, federated learning, AI safety protocols, and complete autonomous intelligence integration.</p>
+                
+                {% if not session.user_id %}
+                <div class="cta-buttons mb-5">
+                    <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg me-3">
+                        <i class="fas fa-rocket me-2"></i>Get Started Free
+                    </a>
+                    <a href="{{ url_for('signin') }}" class="btn btn-outline-primary btn-lg">
+                        <i class="fas fa-sign-in-alt me-2"></i>Sign In
+                    </a>
+                </div>
+                {% else %}
+                <div class="cta-buttons mb-5">
+                    <a href="{{ url_for('chat') }}" class="btn btn-primary btn-lg me-3">
+                        <i class="fas fa-comments me-2"></i>Start Chatting
+                    </a>
+                    <a href="{{ url_for('discover') }}" class="btn btn-outline-primary btn-lg">
+                        <i class="fas fa-compass me-2"></i>Explore Features
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feature Highlights -->
+<div class="features-section py-5">
+    <div class="container">
+        <div class="row g-4">
+            <!-- AI Chat -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card h-100 p-4 rounded-3 bg-gradient text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-comments fa-3x text-primary"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">AI Chat Interface</h4>
+                    <p class="text-muted">Advanced conversational AI with real-time collaboration, multi-model support, and enterprise-grade security.</p>
+                    {% if session.user_id %}
+                    <a href="{{ url_for('chat') }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-arrow-right me-1"></i>Start Chatting
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Quantum Computing -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card h-100 p-4 rounded-3 bg-gradient text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-atom fa-3x text-success"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">Quantum Computing</h4>
+                    <p class="text-muted">Integrated quantum algorithms with IBM Qiskit, Google Cirq, and AWS Braket for next-generation AI models.</p>
+                    {% if session.user_id %}
+                    <a href="{{ url_for('quantum') }}" class="btn btn-sm btn-outline-success">
+                        <i class="fas fa-arrow-right me-1"></i>Explore Quantum
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Neuromorphic AI -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card h-100 p-4 rounded-3 bg-gradient text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-brain fa-3x text-warning"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">Neuromorphic Edge AI</h4>
+                    <p class="text-muted">Energy-efficient spiking neural networks optimized for edge deployment with Intel Loihi and IBM TrueNorth.</p>
+                    {% if session.user_id %}
+                    <a href="{{ url_for('neuromorphic') }}" class="btn btn-sm btn-outline-warning">
+                        <i class="fas fa-arrow-right me-1"></i>Edge Computing
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Federated Learning -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card h-100 p-4 rounded-3 bg-gradient text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-network-wired fa-3x text-info"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">Federated Learning</h4>
+                    <p class="text-muted">Privacy-preserving distributed training with differential privacy and secure multi-party computation.</p>
+                    {% if session.user_id %}
+                    <a href="{{ url_for('federated') }}" class="btn btn-sm btn-outline-info">
+                        <i class="fas fa-arrow-right me-1"></i>Distributed AI
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- AI Safety -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card h-100 p-4 rounded-3 bg-gradient text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-shield-alt fa-3x text-danger"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">AI Safety Protocols</h4>
+                    <p class="text-muted">Constitutional AI, alignment monitoring, bias detection, and automated safety verification systems.</p>
+                    {% if session.user_id %}
+                    <a href="{{ url_for('safety') }}" class="btn btn-sm btn-outline-danger">
+                        <i class="fas fa-arrow-right me-1"></i>Safety First
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Self-Improving AI -->
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card h-100 p-4 rounded-3 bg-gradient text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-magic fa-3x text-secondary"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">Self-Improving AI</h4>
+                    <p class="text-muted">Automated research capabilities with hypothesis generation, experimental design, and scientific discovery acceleration.</p>
+                    {% if session.user_id %}
+                    <a href="{{ url_for('self_improving') }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-arrow-right me-1"></i>Autonomous Research
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enterprise Features -->
+<div class="enterprise-section py-5 bg-dark-subtle">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="display-5 fw-bold">Enterprise-Grade Features</h2>
+            <p class="lead text-muted">Built for scale, security, and performance</p>
+        </div>
+        
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="enterprise-feature text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-lock fa-2x text-primary"></i>
+                    </div>
+                    <h5>Advanced Security</h5>
+                    <p class="text-muted small">End-to-end encryption, audit logs, compliance reporting</p>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="enterprise-feature text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-chart-line fa-2x text-success"></i>
+                    </div>
+                    <h5>Analytics Dashboard</h5>
+                    <p class="text-muted small">Real-time metrics, usage tracking, performance monitoring</p>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="enterprise-feature text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-link fa-2x text-warning"></i>
+                    </div>
+                    <h5>Blockchain Integration</h5>
+                    <p class="text-muted small">Decentralized plugins, revenue sharing, NFT ownership</p>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="enterprise-feature text-center">
+                    <div class="feature-icon mb-3">
+                        <i class="fas fa-users fa-2x text-info"></i>
+                    </div>
+                    <h5>Team Collaboration</h5>
+                    <p class="text-muted small">Shared workspaces, real-time editing, permission management</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Call to Action -->
+{% if not session.user_id %}
+<div class="cta-section py-5 text-center">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <h2 class="fw-bold mb-4">Ready to Transform Your AI Development?</h2>
+                <p class="lead mb-4">Join thousands of researchers and enterprises building the future of AI with Autogent Studio.</p>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-rocket me-2"></i>Start Free Trial
+                    </a>
+                    <a href="#features" class="btn btn-outline-primary btn-lg">
+                        <i class="fas fa-info-circle me-2"></i>Learn More
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Footer -->
+<footer class="footer py-4 bg-dark border-top">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="d-flex align-items-center mb-3">
+                    <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="me-2">
+                        <rect width="32" height="32" rx="8" fill="#6d73db"/>
+                        <path d="M8 16a8 8 0 1 1 16 0A8 8 0 0 1 8 16" fill="#8f96ff"/>
+                        <path d="M12 12h8v8h-8z" fill="#fff"/>
+                    </svg>
+                    <span class="fw-bold">Autogent Studio</span>
+                </div>
+                <p class="text-muted small">The ultimate enterprise AI development platform with quantum computing, neuromorphic AI, and autonomous intelligence.</p>
+            </div>
+            <div class="col-md-6">
+                <div class="row">
+                    <div class="col-6">
+                        <h6 class="fw-bold mb-3">Platform</h6>
+                        <ul class="list-unstyled">
+                            <li><a href="#" class="text-muted text-decoration-none small">Documentation</a></li>
+                            <li><a href="#" class="text-muted text-decoration-none small">API Reference</a></li>
+                            <li><a href="#" class="text-muted text-decoration-none small">Tutorials</a></li>
+                            <li><a href="#" class="text-muted text-decoration-none small">Community</a></li>
+                        </ul>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="fw-bold mb-3">Company</h6>
+                        <ul class="list-unstyled">
+                            <li><a href="#" class="text-muted text-decoration-none small">About</a></li>
+                            <li><a href="#" class="text-muted text-decoration-none small">Privacy Policy</a></li>
+                            <li><a href="#" class="text-muted text-decoration-none small">Terms of Service</a></li>
+                            <li><a href="#" class="text-muted text-decoration-none small">Contact</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr class="my-4 border-secondary">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <p class="text-muted small mb-0">&copy; 2025 Autogent Studio. All rights reserved.</p>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <div class="social-links">
+                    <a href="#" class="text-muted me-3"><i class="fab fa-twitter"></i></a>
+                    <a href="#" class="text-muted me-3"><i class="fab fa-github"></i></a>
+                    <a href="#" class="text-muted me-3"><i class="fab fa-linkedin"></i></a>
+                    <a href="#" class="text-muted"><i class="fab fa-discord"></i></a>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Hero animation
+document.addEventListener('DOMContentLoaded', function() {
+    const heroSection = document.querySelector('.hero-section');
+    if (heroSection) {
+        heroSection.style.opacity = '0';
+        heroSection.style.transform = 'translateY(30px)';
+        
+        setTimeout(() => {
+            heroSection.style.transition = 'all 0.8s ease-out';
+            heroSection.style.opacity = '1';
+            heroSection.style.transform = 'translateY(0)';
+        }, 100);
+    }
+    
+    // Feature cards animation on scroll
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, observerOptions);
+    
+    document.querySelectorAll('.feature-card').forEach(card => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = 'all 0.6s ease-out';
+        observer.observe(card);
+    });
+});
+</script>
+{% endblock %}
