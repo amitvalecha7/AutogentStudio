@@ -1,104 +1,115 @@
-from flask import Blueprint, render_template, request, jsonify, session
-from app import db
-from models import Assistant, Plugin, ModelProvider, User
-from blueprints.auth import login_required, get_current_user
-import logging
+from flask import Blueprint, render_template, request, jsonify
+from flask_login import login_required, current_user
+from models import Assistant, Plugin, AIModel, db
+from sqlalchemy import or_, desc
 
-discover_bp = Blueprint('discover', __name__)
+discover_bp = Blueprint('discover', __name__, url_prefix='/discover')
 
 @discover_bp.route('/')
-def discover_index():
-    # Featured assistants
-    featured_assistants = Assistant.query.filter_by(is_public=True)\
-        .order_by(Assistant.downloads.desc()).limit(8).all()
+def index():
+    # Get featured content
+    featured_assistants = Assistant.query.filter_by(
+        is_featured=True
+    ).order_by(desc(Assistant.usage_count)).limit(8).all()
     
-    # Featured plugins
-    featured_plugins = Plugin.query.filter_by(is_featured=True)\
-        .order_by(Plugin.install_count.desc()).limit(8).all()
+    featured_plugins = Plugin.query.filter_by(
+        is_featured=True
+    ).order_by(desc(Plugin.download_count)).limit(8).all()
     
-    return render_template('discover/discover.html', 
+    # Get recent additions
+    recent_assistants = Assistant.query.order_by(
+        desc(Assistant.created_at)
+    ).limit(4).all()
+    
+    recent_plugins = Plugin.query.order_by(
+        desc(Plugin.created_at)
+    ).limit(4).all()
+    
+    return render_template('discover/index.html',
                          featured_assistants=featured_assistants,
-                         featured_plugins=featured_plugins)
+                         featured_plugins=featured_plugins,
+                         recent_assistants=recent_assistants,
+                         recent_plugins=recent_plugins)
 
 @discover_bp.route('/assistant')
 def assistant_marketplace():
-    page = request.args.get('page', 1, type=int)
+    # Get filter parameters
     category = request.args.get('category', '')
     search = request.args.get('search', '')
+    sort_by = request.args.get('sort', 'featured')  # featured, popular, recent
+    page = int(request.args.get('page', 1))
+    per_page = 20
     
-    query = Assistant.query.filter_by(is_public=True)
+    # Build query
+    query = Assistant.query
+    
+    if category:
+        query = query.filter_by(category=category)
     
     if search:
         query = query.filter(
-            db.or_(
-                Assistant.name.contains(search),
-                Assistant.description.contains(search)
+            or_(
+                Assistant.name.ilike(f'%{search}%'),
+                Assistant.description.ilike(f'%{search}%')
             )
         )
     
-    assistants = query.order_by(Assistant.downloads.desc())\
-        .paginate(page=page, per_page=12, error_out=False)
+    # Apply sorting
+    if sort_by == 'popular':
+        query = query.order_by(desc(Assistant.usage_count))
+    elif sort_by == 'recent':
+        query = query.order_by(desc(Assistant.created_at))
+    elif sort_by == 'rating':
+        query = query.order_by(desc(Assistant.rating))
+    else:  # featured
+        query = query.order_by(desc(Assistant.is_featured), desc(Assistant.usage_count))
     
-    return render_template('discover/assistant.html', 
+    # Paginate
+    assistants = query.paginate(
+        page=page, 
+        per_page=per_page, 
+        error_out=False
+    )
+    
+    # Get categories for filter
+    categories = db.session.query(Assistant.category).distinct().all()
+    categories = [cat[0] for cat in categories if cat[0]]
+    
+    return render_template('discover/assistant.html',
                          assistants=assistants,
-                         search=search,
-                         category=category)
+                         categories=categories,
+                         current_category=category,
+                         current_search=search,
+                         current_sort=sort_by)
 
-@discover_bp.route('/assistant/<int:assistant_id>')
+@discover_bp.route('/assistant/<assistant_id>')
 def assistant_detail(assistant_id):
     assistant = Assistant.query.get_or_404(assistant_id)
-    creator = User.query.get(assistant.creator_id) if assistant.creator_id else None
     
-    # Similar assistants
-    similar_assistants = Assistant.query\
-        .filter(Assistant.id != assistant_id)\
-        .filter_by(is_public=True)\
-        .limit(4).all()
+    # Increment usage count
+    assistant.usage_count += 1
+    db.session.commit()
     
-    return render_template('discover/assistant_detail.html', 
+    # Get related assistants
+    related = Assistant.query.filter(
+        Assistant.category == assistant.category,
+        Assistant.id != assistant_id
+    ).order_by(desc(Assistant.usage_count)).limit(4).all()
+    
+    return render_template('discover/assistant_detail.html',
                          assistant=assistant,
-                         creator=creator,
-                         similar_assistants=similar_assistants)
-
-@discover_bp.route('/assistant/<int:assistant_id>/install', methods=['POST'])
-@login_required
-def install_assistant(assistant_id):
-    user = get_current_user()
-    assistant = Assistant.query.get_or_404(assistant_id)
-    
-    try:
-        # Create a copy for the user (simplified implementation)
-        user_assistant = Assistant(
-            name=f"{assistant.name} (Copy)",
-            description=assistant.description,
-            system_prompt=assistant.system_prompt,
-            model_provider=assistant.model_provider,
-            model_name=assistant.model_name,
-            creator_id=user.id,
-            is_public=False
-        )
-        
-        db.session.add(user_assistant)
-        
-        # Increment download count
-        assistant.downloads += 1
-        
-        db.session.commit()
-        
-        logging.info(f"Assistant {assistant_id} installed by user {user.id}")
-        return jsonify({'success': True, 'message': 'Assistant installed successfully'})
-    
-    except Exception as e:
-        db.session.rollback()
-        logging.error(f"Error installing assistant: {str(e)}")
-        return jsonify({'error': 'Failed to install assistant'}), 500
+                         related_assistants=related)
 
 @discover_bp.route('/mcp')
 def plugin_marketplace():
-    page = request.args.get('page', 1, type=int)
+    # Get filter parameters
     category = request.args.get('category', '')
     search = request.args.get('search', '')
+    sort_by = request.args.get('sort', 'featured')
+    page = int(request.args.get('page', 1))
+    per_page = 20
     
+    # Build query
     query = Plugin.query
     
     if category:
@@ -106,87 +117,148 @@ def plugin_marketplace():
     
     if search:
         query = query.filter(
-            db.or_(
-                Plugin.name.contains(search),
-                Plugin.description.contains(search)
+            or_(
+                Plugin.name.ilike(f'%{search}%'),
+                Plugin.description.ilike(f'%{search}%')
             )
         )
     
-    plugins = query.order_by(Plugin.install_count.desc())\
-        .paginate(page=page, per_page=12, error_out=False)
+    # Apply sorting
+    if sort_by == 'popular':
+        query = query.order_by(desc(Plugin.download_count))
+    elif sort_by == 'recent':
+        query = query.order_by(desc(Plugin.created_at))
+    elif sort_by == 'rating':
+        query = query.order_by(desc(Plugin.rating))
+    else:  # featured
+        query = query.order_by(desc(Plugin.is_featured), desc(Plugin.download_count))
+    
+    # Paginate
+    plugins = query.paginate(
+        page=page, 
+        per_page=per_page, 
+        error_out=False
+    )
     
     # Get categories for filter
-    categories = db.session.query(Plugin.category)\
-        .filter(Plugin.category.isnot(None))\
-        .distinct().all()
-    categories = [cat[0] for cat in categories]
+    categories = db.session.query(Plugin.category).distinct().all()
+    categories = [cat[0] for cat in categories if cat[0]]
     
-    return render_template('discover/mcp.html', 
+    return render_template('discover/mcp.html',
                          plugins=plugins,
                          categories=categories,
-                         search=search,
-                         selected_category=category)
+                         current_category=category,
+                         current_search=search,
+                         current_sort=sort_by)
 
-@discover_bp.route('/mcp/<int:plugin_id>')
+@discover_bp.route('/mcp/<plugin_id>')
 def plugin_detail(plugin_id):
     plugin = Plugin.query.get_or_404(plugin_id)
     
-    # Related plugins
-    related_plugins = Plugin.query\
-        .filter(Plugin.id != plugin_id)\
-        .filter_by(category=plugin.category)\
-        .limit(4).all()
+    # Increment download count
+    plugin.download_count += 1
+    db.session.commit()
     
-    return render_template('discover/mcp_detail.html', 
+    # Get related plugins
+    related = Plugin.query.filter(
+        Plugin.category == plugin.category,
+        Plugin.id != plugin_id
+    ).order_by(desc(Plugin.download_count)).limit(4).all()
+    
+    return render_template('discover/plugin_detail.html',
                          plugin=plugin,
-                         related_plugins=related_plugins)
-
-@discover_bp.route('/mcp/<int:plugin_id>/install', methods=['POST'])
-@login_required
-def install_plugin(plugin_id):
-    user = get_current_user()
-    plugin = Plugin.query.get_or_404(plugin_id)
-    
-    try:
-        # In a real implementation, this would handle actual plugin installation
-        # For now, just increment the install count
-        plugin.install_count += 1
-        db.session.commit()
-        
-        logging.info(f"Plugin {plugin_id} installed by user {user.id}")
-        return jsonify({'success': True, 'message': 'Plugin installed successfully'})
-    
-    except Exception as e:
-        db.session.rollback()
-        logging.error(f"Error installing plugin: {str(e)}")
-        return jsonify({'error': 'Failed to install plugin'}), 500
+                         related_plugins=related)
 
 @discover_bp.route('/model')
 def model_marketplace():
-    providers = ModelProvider.query.filter_by(is_active=True).all()
+    # Get available AI models
+    sort_by = request.args.get('sort', 'provider')
+    search = request.args.get('search', '')
+    model_type = request.args.get('type', '')  # chat, image, embedding
     
-    # Group models by provider
-    model_data = []
-    for provider in providers:
-        if provider.supported_models:
-            import json
-            models = json.loads(provider.supported_models)
-            model_data.append({
-                'provider': provider,
-                'models': models
-            })
+    query = AIModel.query.filter_by(is_active=True)
     
-    return render_template('discover/model.html', model_data=model_data)
+    if search:
+        query = query.filter(
+            or_(
+                AIModel.name.ilike(f'%{search}%'),
+                AIModel.provider.ilike(f'%{search}%')
+            )
+        )
+    
+    if model_type:
+        query = query.filter_by(model_type=model_type)
+    
+    if sort_by == 'name':
+        query = query.order_by(AIModel.name)
+    elif sort_by == 'cost':
+        query = query.order_by(AIModel.cost_per_token_input)
+    else:  # provider
+        query = query.order_by(AIModel.provider, AIModel.name)
+    
+    models = query.all()
+    
+    # Group by provider
+    models_by_provider = {}
+    for model in models:
+        if model.provider not in models_by_provider:
+            models_by_provider[model.provider] = []
+        models_by_provider[model.provider].append(model)
+    
+    # Get model types for filter
+    model_types = db.session.query(AIModel.model_type).distinct().all()
+    model_types = [mt[0] for mt in model_types if mt[0]]
+    
+    return render_template('discover/model.html',
+                         models_by_provider=models_by_provider,
+                         model_types=model_types,
+                         current_type=model_type,
+                         current_search=search,
+                         current_sort=sort_by)
 
 @discover_bp.route('/provider')
 def provider_marketplace():
-    providers = ModelProvider.query.filter_by(is_active=True).all()
-    return render_template('discover/provider.html', providers=providers)
+    # Get unique providers with their model counts
+    providers = db.session.query(
+        AIModel.provider,
+        db.func.count(AIModel.id).label('model_count')
+    ).filter_by(is_active=True).group_by(AIModel.provider).all()
+    
+    provider_info = {
+        'openai': {
+            'name': 'OpenAI',
+            'description': 'Leading AI research company with GPT models',
+            'website': 'https://openai.com',
+            'capabilities': ['chat', 'image', 'embedding', 'audio']
+        },
+        'anthropic': {
+            'name': 'Anthropic',
+            'description': 'AI safety company behind Claude models',
+            'website': 'https://anthropic.com',
+            'capabilities': ['chat', 'analysis']
+        },
+        'google': {
+            'name': 'Google AI',
+            'description': 'Google\'s AI platform with Gemini models',
+            'website': 'https://ai.google',
+            'capabilities': ['chat', 'multimodal', 'code']
+        },
+        'cohere': {
+            'name': 'Cohere',
+            'description': 'Enterprise AI platform for language understanding',
+            'website': 'https://cohere.com',
+            'capabilities': ['chat', 'embedding', 'classification']
+        }
+    }
+    
+    return render_template('discover/provider.html',
+                         providers=providers,
+                         provider_info=provider_info)
 
 @discover_bp.route('/search')
 def search():
-    query = request.args.get('q', '')
-    category = request.args.get('category', 'all')
+    query = request.args.get('q', '').strip()
+    category = request.args.get('category', 'all')  # all, assistant, plugin, model
     
     results = {
         'assistants': [],
@@ -195,41 +267,74 @@ def search():
     }
     
     if query:
-        if category in ['all', 'assistants']:
-            results['assistants'] = Assistant.query\
-                .filter_by(is_public=True)\
-                .filter(
-                    db.or_(
-                        Assistant.name.contains(query),
-                        Assistant.description.contains(query)
-                    )
-                ).limit(10).all()
+        if category in ['all', 'assistant']:
+            assistants = Assistant.query.filter(
+                or_(
+                    Assistant.name.ilike(f'%{query}%'),
+                    Assistant.description.ilike(f'%{query}%')
+                )
+            ).limit(10).all()
+            results['assistants'] = assistants
         
-        if category in ['all', 'plugins']:
-            results['plugins'] = Plugin.query\
-                .filter(
-                    db.or_(
-                        Plugin.name.contains(query),
-                        Plugin.description.contains(query)
-                    )
-                ).limit(10).all()
+        if category in ['all', 'plugin']:
+            plugins = Plugin.query.filter(
+                or_(
+                    Plugin.name.ilike(f'%{query}%'),
+                    Plugin.description.ilike(f'%{query}%')
+                )
+            ).limit(10).all()
+            results['plugins'] = plugins
         
-        if category in ['all', 'models']:
-            results['models'] = ModelProvider.query\
-                .filter_by(is_active=True)\
-                .filter(
-                    db.or_(
-                        ModelProvider.name.contains(query),
-                        ModelProvider.description.contains(query)
-                    )
-                ).limit(10).all()
+        if category in ['all', 'model']:
+            models = AIModel.query.filter(
+                or_(
+                    AIModel.name.ilike(f'%{query}%'),
+                    AIModel.provider.ilike(f'%{query}%')
+                )
+            ).limit(10).all()
+            results['models'] = models
+    
+    return render_template('discover/search.html',
+                         query=query,
+                         category=category,
+                         results=results)
+
+@discover_bp.route('/assistant/<assistant_id>/install', methods=['POST'])
+@login_required
+def install_assistant(assistant_id):
+    assistant = Assistant.query.get_or_404(assistant_id)
+    
+    # Create a new chat session with this assistant
+    from blueprints.chat import new_session
+    from flask import request as flask_request
+    
+    # Temporarily modify request to include assistant data
+    original_json = flask_request.get_json
+    flask_request.get_json = lambda: {
+        'title': f"Chat with {assistant.name}",
+        'model_provider': assistant.model_config.get('provider', 'openai'),
+        'model_name': assistant.model_config.get('model', 'gpt-4o'),
+        'system_prompt': assistant.system_prompt,
+        'settings': assistant.model_config
+    }
+    
+    result = new_session()
+    flask_request.get_json = original_json
+    
+    return result
+
+@discover_bp.route('/mcp/<plugin_id>/install', methods=['POST'])
+@login_required
+def install_plugin(plugin_id):
+    plugin = Plugin.query.get_or_404(plugin_id)
+    
+    # In a real implementation, this would:
+    # 1. Add plugin to user's installed plugins
+    # 2. Set up plugin configuration
+    # 3. Install dependencies if needed
     
     return jsonify({
-        'query': query,
-        'category': category,
-        'results': {
-            'assistants': [{'id': a.id, 'name': a.name, 'description': a.description} for a in results['assistants']],
-            'plugins': [{'id': p.id, 'name': p.name, 'description': p.description} for p in results['plugins']],
-            'models': [{'id': m.id, 'name': m.display_name, 'description': m.description} for m in results['models']]
-        }
+        'success': True,
+        'message': f'Plugin {plugin.name} installed successfully',
+        'plugin_id': plugin_id
     })

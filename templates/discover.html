@@ -2,412 +2,318 @@
 
 {% block title %}Discover - Autogent Studio{% endblock %}
 
+{% block page_title %}Discover AI Agents & Tools{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="bg-primary text-white p-4 rounded">
-                <h1 class="display-4 mb-2">
-                    <i class="fas fa-search me-3"></i>Discover
-                </h1>
-                <p class="lead mb-0">Explore AI assistants, quantum algorithms, neuromorphic models, and blockchain plugins</p>
+<div class="row">
+    <div class="col-12">
+        <div class="discover-hero text-center mb-5">
+            <h1 class="display-4 fw-bold as-gradient-text">Discover</h1>
+            <p class="lead text-muted mb-4">
+                Explore AI agents, plugins, models, and providers in the Autogent Studio ecosystem
+            </p>
+            
+            <!-- Global Search -->
+            <div class="search-container">
+                <div class="input-group input-group-lg">
+                    <span class="input-group-text">
+                        <i class="fas fa-search"></i>
+                    </span>
+                    <input type="text" class="form-control" placeholder="Search agents, plugins, models..." id="globalSearch">
+                    <button class="as-btn as-btn-primary" onclick="performGlobalSearch()">
+                        Search
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Discovery Categories -->
+<div class="row mb-5">
+    <div class="col-lg-3 col-md-6 mb-4">
+        <a href="/discover/assistant" class="text-decoration-none">
+            <div class="category-card as-card h-100">
+                <div class="as-card-body text-center">
+                    <div class="category-icon mb-3">
+                        <i class="fas fa-robot fa-3x text-primary"></i>
+                    </div>
+                    <h5 class="category-title">AI Assistants</h5>
+                    <p class="text-muted">Pre-built AI agents for various tasks and domains</p>
+                    <div class="category-stats">
+                        <span class="as-badge as-badge-primary">1,247 Available</span>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-4">
+        <a href="/discover/mcp" class="text-decoration-none">
+            <div class="category-card as-card h-100">
+                <div class="as-card-body text-center">
+                    <div class="category-icon mb-3">
+                        <i class="fas fa-plug fa-3x text-success"></i>
+                    </div>
+                    <h5 class="category-title">MCP Plugins</h5>
+                    <p class="text-muted">Model Context Protocol plugins and tools</p>
+                    <div class="category-stats">
+                        <span class="as-badge as-badge-success">342 Plugins</span>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-4">
+        <a href="/discover/model" class="text-decoration-none">
+            <div class="category-card as-card h-100">
+                <div class="as-card-body text-center">
+                    <div class="category-icon mb-3">
+                        <i class="fas fa-brain fa-3x text-warning"></i>
+                    </div>
+                    <h5 class="category-title">AI Models</h5>
+                    <p class="text-muted">Language models, image generators, and specialized AI</p>
+                    <div class="category-stats">
+                        <span class="as-badge as-badge-warning">156 Models</span>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-4">
+        <a href="/discover/provider" class="text-decoration-none">
+            <div class="category-card as-card h-100">
+                <div class="as-card-body text-center">
+                    <div class="category-icon mb-3">
+                        <i class="fas fa-server fa-3x text-info"></i>
+                    </div>
+                    <h5 class="category-title">Providers</h5>
+                    <p class="text-muted">AI service providers and infrastructure</p>
+                    <div class="category-stats">
+                        <span class="as-badge as-badge-info">23 Providers</span>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Featured Content -->
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Featured Assistants -->
+        <div class="as-card mb-4">
+            <div class="as-card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="as-card-title">
+                        <i class="fas fa-star text-warning me-2"></i>Featured Assistants
+                    </h5>
+                    <a href="/discover/assistant" class="as-btn as-btn-sm as-btn-primary">View All</a>
+                </div>
+            </div>
+            <div class="as-card-body">
+                <div class="row">
+                    {% for assistant in assistants[:6] %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="assistant-card">
+                            <div class="assistant-header">
+                                <div class="assistant-avatar">
+                                    {{ assistant.name[0] }}
+                                </div>
+                                <div class="assistant-info">
+                                    <h6 class="assistant-name">{{ assistant.name }}</h6>
+                                    <small class="text-muted">{{ assistant.category }}</small>
+                                </div>
+                            </div>
+                            <p class="assistant-description text-muted">{{ assistant.description[:80] }}...</p>
+                            <div class="assistant-stats">
+                                <span class="stat-item">
+                                    <i class="fas fa-users text-primary"></i>
+                                    {{ assistant.usage_count }}
+                                </span>
+                                <span class="stat-item">
+                                    <i class="fas fa-star text-warning"></i>
+                                    {{ assistant.rating }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Featured Plugins -->
+        <div class="as-card">
+            <div class="as-card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="as-card-title">
+                        <i class="fas fa-fire text-danger me-2"></i>Trending Plugins
+                    </h5>
+                    <a href="/discover/mcp" class="as-btn as-btn-sm as-btn-primary">View All</a>
+                </div>
+            </div>
+            <div class="as-card-body">
+                <div class="row">
+                    {% for plugin in plugins[:6] %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="plugin-card">
+                            <div class="plugin-header">
+                                <div class="plugin-icon">
+                                    <i class="fas fa-plug"></i>
+                                </div>
+                                <div class="plugin-info">
+                                    <h6 class="plugin-name">{{ plugin.name }}</h6>
+                                    <small class="text-muted">{{ plugin.author }}</small>
+                                </div>
+                            </div>
+                            <p class="plugin-description text-muted">{{ plugin.description[:80] }}...</p>
+                            <div class="plugin-stats">
+                                <span class="as-badge as-badge-{{ plugin.rating|lower }}">{{ plugin.rating }}</span>
+                                <span class="stat-item">
+                                    <i class="fas fa-download text-success"></i>
+                                    {{ plugin.usage_count }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
     
-    <!-- Search Bar -->
-    <div class="row mb-4">
-        <div class="col-md-8 mx-auto">
-            <div class="input-group input-group-lg">
-                <span class="input-group-text bg-dark text-light border-secondary">
-                    <i class="fas fa-search"></i>
-                </span>
-                <input type="text" id="searchInput" class="form-control bg-dark text-light border-secondary" 
-                       placeholder="Search assistants, plugins, models..." onkeyup="performSearch()">
-                <button class="btn btn-primary" type="button" onclick="performSearch()">
-                    Search
-                </button>
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Quick Create -->
+        <div class="as-card mb-4">
+            <div class="as-card-header">
+                <h6 class="as-card-title">
+                    <i class="fas fa-plus text-success me-2"></i>Quick Create
+                </h6>
             </div>
-        </div>
-    </div>
-    
-    <!-- Navigation Tabs -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <ul class="nav nav-tabs nav-fill bg-dark">
-                <li class="nav-item">
-                    <a class="nav-link active" data-bs-toggle="tab" href="#assistants">
-                        <i class="fas fa-robot me-2"></i>Assistants
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#plugins">
-                        <i class="fas fa-plug me-2"></i>Plugins
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#models">
-                        <i class="fas fa-brain me-2"></i>Models
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#quantum">
-                        <i class="fas fa-atom me-2"></i>Quantum
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#neuromorphic">
-                        <i class="fas fa-microchip me-2"></i>Neuromorphic
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </div>
-    
-    <!-- Tab Content -->
-    <div class="tab-content">
-        <!-- Assistants Tab -->
-        <div class="tab-pane fade show active" id="assistants">
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <h3>Featured Assistants</h3>
-                </div>
-                <div class="col-md-6 text-end">
-                    <button class="btn btn-primary" onclick="createAssistant()">
-                        <i class="fas fa-plus me-2"></i>Create Assistant
-                    </button>
-                </div>
-            </div>
-            
-            <div class="row" id="assistantGrid">
-                {% for assistant in featured_assistants %}
-                    <div class="col-md-4 mb-4">
-                        <div class="card bg-dark border-primary h-100">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <div class="assistant-icon">
-                                        <i class="fas fa-robot fa-2x text-primary"></i>
-                                    </div>
-                                    <div>
-                                        <span class="badge bg-success">{{ assistant.usage_count }} uses</span>
-                                    </div>
-                                </div>
-                                <h5 class="card-title">{{ assistant.name }}</h5>
-                                <p class="card-text text-muted">{{ assistant.description }}</p>
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted">{{ assistant.model }}</small>
-                                    <div class="btn-group">
-                                        <button class="btn btn-sm btn-outline-primary" onclick="useAssistant('{{ assistant.id }}')">
-                                            <i class="fas fa-play"></i> Use
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="viewAssistant('{{ assistant.id }}')">
-                                            <i class="fas fa-eye"></i> View
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+            <div class="as-card-body">
+                <div class="quick-create-list">
+                    <a href="/chat" class="quick-create-item d-flex align-items-center p-2 text-decoration-none">
+                        <i class="fas fa-comments text-primary me-3"></i>
+                        <div>
+                            <h6 class="mb-0">New Chat</h6>
+                            <small class="text-muted">Start conversation with AI</small>
                         </div>
-                    </div>
-                {% endfor %}
+                    </a>
+                    
+                    <a href="/orchestration" class="quick-create-item d-flex align-items-center p-2 text-decoration-none">
+                        <i class="fas fa-project-diagram text-warning me-3"></i>
+                        <div>
+                            <h6 class="mb-0">AI Workflow</h6>
+                            <small class="text-muted">Build visual AI pipeline</small>
+                        </div>
+                    </a>
+                    
+                    <a href="/quantum" class="quick-create-item d-flex align-items-center p-2 text-decoration-none">
+                        <i class="fas fa-atom text-info me-3"></i>
+                        <div>
+                            <h6 class="mb-0">Quantum Circuit</h6>
+                            <small class="text-muted">Design quantum algorithm</small>
+                        </div>
+                    </a>
+                    
+                    <a href="/neuromorphic" class="quick-create-item d-flex align-items-center p-2 text-decoration-none">
+                        <i class="fas fa-brain text-success me-3"></i>
+                        <div>
+                            <h6 class="mb-0">Neural Network</h6>
+                            <small class="text-muted">Create spiking network</small>
+                        </div>
+                    </a>
+                </div>
             </div>
         </div>
         
-        <!-- Plugins Tab -->
-        <div class="tab-pane fade" id="plugins">
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <h3>Featured Plugins</h3>
-                </div>
-                <div class="col-md-6 text-end">
-                    <button class="btn btn-primary" onclick="uploadPlugin()">
-                        <i class="fas fa-upload me-2"></i>Upload Plugin
-                    </button>
-                </div>
+        <!-- Categories -->
+        <div class="as-card mb-4">
+            <div class="as-card-header">
+                <h6 class="as-card-title">Popular Categories</h6>
             </div>
-            
-            <div class="row" id="pluginGrid">
-                {% for plugin in featured_plugins %}
-                    <div class="col-md-4 mb-4">
-                        <div class="card bg-dark border-success h-100">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <div class="plugin-icon">
-                                        <i class="fas fa-plug fa-2x text-success"></i>
-                                    </div>
-                                    <div>
-                                        <span class="badge bg-info">{{ plugin.downloads }} downloads</span>
-                                    </div>
-                                </div>
-                                <h5 class="card-title">{{ plugin.name }}</h5>
-                                <p class="card-text text-muted">{{ plugin.description }}</p>
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted">by {{ plugin.author }}</small>
-                                    <div class="btn-group">
-                                        <button class="btn btn-sm btn-outline-success" onclick="installPlugin('{{ plugin.id }}')">
-                                            <i class="fas fa-download"></i> Install
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="viewPlugin('{{ plugin.id }}')">
-                                            <i class="fas fa-eye"></i> View
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+            <div class="as-card-body">
+                <div class="category-list">
+                    <div class="category-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-code text-primary me-2"></i>Programming</span>
+                        <span class="as-badge as-badge-primary">234</span>
                     </div>
-                {% endfor %}
-            </div>
-        </div>
-        
-        <!-- Models Tab -->
-        <div class="tab-pane fade" id="models">
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <h3>Available Models</h3>
-                </div>
-                <div class="col-md-6 text-end">
-                    <button class="btn btn-primary" onclick="finetuneMeodel()">
-                        <i class="fas fa-cog me-2"></i>Fine-tune Model
-                    </button>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-4 mb-4">
-                    <div class="card bg-dark border-info h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="model-icon">
-                                    <i class="fas fa-brain fa-2x text-info"></i>
-                                </div>
-                                <div>
-                                    <span class="badge bg-success">Available</span>
-                                </div>
-                            </div>
-                            <h5 class="card-title">GPT-4o</h5>
-                            <p class="card-text text-muted">OpenAI's most advanced multimodal model</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">OpenAI</small>
-                                <button class="btn btn-sm btn-outline-info" onclick="useModel('gpt-4o')">
-                                    <i class="fas fa-play"></i> Use
-                                </button>
-                            </div>
-                        </div>
+                    <div class="category-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-chart-bar text-success me-2"></i>Analytics</span>
+                        <span class="as-badge as-badge-success">189</span>
                     </div>
-                </div>
-                
-                <div class="col-md-4 mb-4">
-                    <div class="card bg-dark border-info h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="model-icon">
-                                    <i class="fas fa-brain fa-2x text-info"></i>
-                                </div>
-                                <div>
-                                    <span class="badge bg-success">Available</span>
-                                </div>
-                            </div>
-                            <h5 class="card-title">Claude Sonnet 4</h5>
-                            <p class="card-text text-muted">Anthropic's latest reasoning model</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">Anthropic</small>
-                                <button class="btn btn-sm btn-outline-info" onclick="useModel('claude-sonnet-4')">
-                                    <i class="fas fa-play"></i> Use
-                                </button>
-                            </div>
-                        </div>
+                    <div class="category-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-graduation-cap text-warning me-2"></i>Education</span>
+                        <span class="as-badge as-badge-warning">156</span>
                     </div>
-                </div>
-                
-                <div class="col-md-4 mb-4">
-                    <div class="card bg-dark border-warning h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="model-icon">
-                                    <i class="fas fa-atom fa-2x text-warning"></i>
-                                </div>
-                                <div>
-                                    <span class="badge bg-warning">Quantum</span>
-                                </div>
-                            </div>
-                            <h5 class="card-title">Quantum Enhanced GPT</h5>
-                            <p class="card-text text-muted">Quantum-enhanced AI model with superior reasoning</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">Autogent Studio</small>
-                                <button class="btn btn-sm btn-outline-warning" onclick="useModel('quantum-gpt')">
-                                    <i class="fas fa-play"></i> Use
-                                </button>
-                            </div>
-                        </div>
+                    <div class="category-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-palette text-info me-2"></i>Creative</span>
+                        <span class="as-badge as-badge-info">134</span>
+                    </div>
+                    <div class="category-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-briefcase text-secondary me-2"></i>Business</span>
+                        <span class="as-badge as-badge-secondary">127</span>
+                    </div>
+                    <div class="category-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-atom text-danger me-2"></i>Quantum</span>
+                        <span class="as-badge as-badge-error">89</span>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Quantum Tab -->
-        <div class="tab-pane fade" id="quantum">
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <h3>Quantum Algorithms</h3>
-                </div>
-                <div class="col-md-6 text-end">
-                    <button class="btn btn-primary" onclick="createQuantumAlgorithm()">
-                        <i class="fas fa-plus me-2"></i>Create Algorithm
-                    </button>
-                </div>
+        <!-- Latest Updates -->
+        <div class="as-card">
+            <div class="as-card-header">
+                <h6 class="as-card-title">Latest Updates</h6>
             </div>
-            
-            <div class="row">
-                <div class="col-md-4 mb-4">
-                    <div class="card bg-dark border-warning h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="quantum-icon">
-                                    <i class="fas fa-atom fa-2x text-warning"></i>
-                                </div>
-                                <div>
-                                    <span class="badge bg-warning">Quantum</span>
-                                </div>
-                            </div>
-                            <h5 class="card-title">Quantum Optimization</h5>
-                            <p class="card-text text-muted">Quantum-enhanced optimization algorithms</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">Qiskit</small>
-                                <button class="btn btn-sm btn-outline-warning" onclick="useQuantumAlgorithm('optimization')">
-                                    <i class="fas fa-play"></i> Use
-                                </button>
-                            </div>
+            <div class="as-card-body">
+                <div class="update-list">
+                    <div class="update-item">
+                        <div class="update-icon">
+                            <i class="fas fa-robot text-primary"></i>
+                        </div>
+                        <div class="update-content">
+                            <h6 class="mb-1">New AI Assistant</h6>
+                            <p class="small text-muted mb-1">Quantum Physics Tutor added to marketplace</p>
+                            <small class="text-muted">2 hours ago</small>
                         </div>
                     </div>
-                </div>
-                
-                <div class="col-md-4 mb-4">
-                    <div class="card bg-dark border-warning h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="quantum-icon">
-                                    <i class="fas fa-atom fa-2x text-warning"></i>
-                                </div>
-                                <div>
-                                    <span class="badge bg-warning">Quantum</span>
-                                </div>
-                            </div>
-                            <h5 class="card-title">Quantum Machine Learning</h5>
-                            <p class="card-text text-muted">Quantum ML algorithms for enhanced AI</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">Cirq</small>
-                                <button class="btn btn-sm btn-outline-warning" onclick="useQuantumAlgorithm('ml')">
-                                    <i class="fas fa-play"></i> Use
-                                </button>
-                            </div>
+                    
+                    <div class="update-item">
+                        <div class="update-icon">
+                            <i class="fas fa-plug text-success"></i>
+                        </div>
+                        <div class="update-content">
+                            <h6 class="mb-1">Plugin Update</h6>
+                            <p class="small text-muted mb-1">Blockchain MCP v2.1 with new features</p>
+                            <small class="text-muted">5 hours ago</small>
                         </div>
                     </div>
-                </div>
-                
-                <div class="col-md-4 mb-4">
-                    <div class="card bg-dark border-warning h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="quantum-icon">
-                                    <i class="fas fa-atom fa-2x text-warning"></i>
-                                </div>
-                                <div>
-                                    <span class="badge bg-warning">Quantum</span>
-                                </div>
-                            </div>
-                            <h5 class="card-title">Quantum Cryptography</h5>
-                            <p class="card-text text-muted">Quantum-safe cryptographic algorithms</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">AWS Braket</small>
-                                <button class="btn btn-sm btn-outline-warning" onclick="useQuantumAlgorithm('crypto')">
-                                    <i class="fas fa-play"></i> Use
-                                </button>
-                            </div>
+                    
+                    <div class="update-item">
+                        <div class="update-icon">
+                            <i class="fas fa-brain text-warning"></i>
+                        </div>
+                        <div class="update-content">
+                            <h6 class="mb-1">Model Release</h6>
+                            <p class="small text-muted mb-1">GPT-4o Turbo now available</p>
+                            <small class="text-muted">1 day ago</small>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Neuromorphic Tab -->
-        <div class="tab-pane fade" id="neuromorphic">
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <h3>Neuromorphic Models</h3>
-                </div>
-                <div class="col-md-6 text-end">
-                    <button class="btn btn-primary" onclick="createNeuromorphicModel()">
-                        <i class="fas fa-plus me-2"></i>Create Model
-                    </button>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-4 mb-4">
-                    <div class="card bg-dark border-danger h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="neuromorphic-icon">
-                                    <i class="fas fa-microchip fa-2x text-danger"></i>
-                                </div>
-                                <div>
-                                    <span class="badge bg-danger">Edge AI</span>
-                                </div>
-                            </div>
-                            <h5 class="card-title">Spiking Neural Network</h5>
-                            <p class="card-text text-muted">Energy-efficient edge AI processing</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">Intel Loihi</small>
-                                <button class="btn btn-sm btn-outline-danger" onclick="useNeuromorphicModel('snn')">
-                                    <i class="fas fa-play"></i> Use
-                                </button>
-                            </div>
+                    
+                    <div class="update-item">
+                        <div class="update-icon">
+                            <i class="fas fa-shield-alt text-danger"></i>
                         </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-4 mb-4">
-                    <div class="card bg-dark border-danger h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="neuromorphic-icon">
-                                    <i class="fas fa-microchip fa-2x text-danger"></i>
-                                </div>
-                                <div>
-                                    <span class="badge bg-danger">Edge AI</span>
-                                </div>
-                            </div>
-                            <h5 class="card-title">Neuromorphic Vision</h5>
-                            <p class="card-text text-muted">Real-time visual processing</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">IBM TrueNorth</small>
-                                <button class="btn btn-sm btn-outline-danger" onclick="useNeuromorphicModel('vision')">
-                                    <i class="fas fa-play"></i> Use
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-4 mb-4">
-                    <div class="card bg-dark border-danger h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="neuromorphic-icon">
-                                    <i class="fas fa-microchip fa-2x text-danger"></i>
-                                </div>
-                                <div>
-                                    <span class="badge bg-danger">Edge AI</span>
-                                </div>
-                            </div>
-                            <h5 class="card-title">Adaptive Learning</h5>
-                            <p class="card-text text-muted">Self-adapting neuromorphic systems</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">SpiNNaker</small>
-                                <button class="btn btn-sm btn-outline-danger" onclick="useNeuromorphicModel('adaptive')">
-                                    <i class="fas fa-play"></i> Use
-                                </button>
-                            </div>
+                        <div class="update-content">
+                            <h6 class="mb-1">Safety Update</h6>
+                            <p class="small text-muted mb-1">Enhanced constitutional AI protocols</p>
+                            <small class="text-muted">2 days ago</small>
                         </div>
                     </div>
                 </div>
@@ -415,77 +321,440 @@
         </div>
     </div>
 </div>
+
+<!-- Global Search Results Modal -->
+<div class="modal fade" id="searchResultsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content as-card">
+            <div class="modal-header">
+                <h5 class="modal-title">Search Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="search-results-container">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
-{% block scripts %}
+{% block css %}
+<style>
+.discover-hero {
+    background: linear-gradient(135deg, var(--as-bg-primary), var(--as-bg-secondary));
+    border-radius: var(--as-radius-xl);
+    padding: var(--as-space-2xl) var(--as-space-lg);
+    margin-bottom: var(--as-space-xl);
+}
+
+.as-gradient-text {
+    background: linear-gradient(135deg, var(--as-primary), var(--as-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.search-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.category-card {
+    transition: var(--as-transition);
+    border: 1px solid var(--as-bg-tertiary);
+    cursor: pointer;
+}
+
+.category-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--as-shadow-xl);
+    border-color: var(--as-primary);
+}
+
+.category-icon {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.category-title {
+    color: var(--as-text-primary);
+    margin-bottom: var(--as-space-sm);
+}
+
+.assistant-card, .plugin-card {
+    background: var(--as-bg-primary);
+    border-radius: var(--as-radius-lg);
+    padding: var(--as-space-md);
+    transition: var(--as-transition);
+    height: 100%;
+    cursor: pointer;
+}
+
+.assistant-card:hover, .plugin-card:hover {
+    background: var(--as-bg-secondary);
+    transform: translateY(-2px);
+}
+
+.assistant-header, .plugin-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--as-space-sm);
+}
+
+.assistant-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--as-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    margin-right: var(--as-space-md);
+}
+
+.plugin-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--as-radius-md);
+    background: var(--as-success);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--as-space-md);
+}
+
+.assistant-info, .plugin-info {
+    flex: 1;
+}
+
+.assistant-name, .plugin-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+    color: var(--as-text-primary);
+}
+
+.assistant-description, .plugin-description {
+    font-size: 0.85rem;
+    line-height: 1.4;
+    margin-bottom: var(--as-space-sm);
+}
+
+.assistant-stats, .plugin-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stat-item {
+    font-size: 0.75rem;
+    color: var(--as-text-muted);
+}
+
+.stat-item i {
+    margin-right: 4px;
+}
+
+.quick-create-item {
+    padding: var(--as-space-sm) var(--as-space-md);
+    border-radius: var(--as-radius-md);
+    transition: var(--as-transition);
+    color: var(--as-text-primary);
+    margin-bottom: var(--as-space-xs);
+}
+
+.quick-create-item:hover {
+    background: var(--as-bg-tertiary);
+    color: var(--as-text-primary);
+    transform: translateX(5px);
+}
+
+.category-item {
+    padding: var(--as-space-sm) 0;
+    border-bottom: 1px solid var(--as-bg-tertiary);
+}
+
+.category-item:last-child {
+    border-bottom: none;
+}
+
+.update-item {
+    display: flex;
+    align-items: flex-start;
+    padding: var(--as-space-sm) 0;
+    border-bottom: 1px solid var(--as-bg-tertiary);
+}
+
+.update-item:last-child {
+    border-bottom: none;
+}
+
+.update-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--as-bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--as-space-md);
+    flex-shrink: 0;
+}
+
+.update-content h6 {
+    font-size: 0.9rem;
+}
+
+.search-results-container {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.search-result-section {
+    margin-bottom: var(--as-space-lg);
+}
+
+.search-result-item {
+    background: var(--as-bg-secondary);
+    border-radius: var(--as-radius-md);
+    padding: var(--as-space-md);
+    margin-bottom: var(--as-space-sm);
+    transition: var(--as-transition);
+    cursor: pointer;
+}
+
+.search-result-item:hover {
+    background: var(--as-bg-tertiary);
+    transform: translateX(5px);
+}
+
+.result-header {
+    display: flex;
+    justify-content: between;
+    align-items: start;
+    margin-bottom: var(--as-space-sm);
+}
+
+.result-title {
+    font-weight: 600;
+    color: var(--as-text-primary);
+    margin-bottom: 4px;
+}
+
+.result-type {
+    font-size: 0.75rem;
+    color: var(--as-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.result-description {
+    color: var(--as-text-secondary);
+    line-height: 1.4;
+}
+</style>
+{% endblock %}
+
+{% block js %}
 <script>
-    function performSearch() {
-        const searchTerm = document.getElementById('searchInput').value;
-        if (searchTerm.length > 0) {
-            // Implement search functionality
-            console.log('Searching for:', searchTerm);
-        }
-    }
+// Global search functionality
+function performGlobalSearch() {
+    const query = document.getElementById('globalSearch').value.trim();
+    if (!query) return;
     
-    function useAssistant(assistantId) {
-        // Redirect to chat with assistant
-        window.location.href = `/chat?assistant=${assistantId}`;
-    }
+    // Show loading modal
+    const modal = new bootstrap.Modal(document.getElementById('searchResultsModal'));
+    modal.show();
     
-    function viewAssistant(assistantId) {
-        window.location.href = `/discover/assistant/${assistantId}`;
-    }
+    const container = document.querySelector('.search-results-container');
+    container.innerHTML = '<div class="text-center py-4"><span class="as-loading"></span> Searching...</div>';
     
-    function createAssistant() {
-        window.location.href = '/discover/assistant/create';
-    }
-    
-    function installPlugin(pluginId) {
-        fetch(`/discover/plugin/install/${pluginId}`, {
-            method: 'POST'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert('Installation failed: ' + data.error);
-            } else {
-                alert('Plugin installed successfully!');
+    // Simulate search API call
+    setTimeout(() => {
+        const mockResults = generateMockSearchResults(query);
+        displaySearchResults(mockResults, container);
+    }, 1000);
+}
+
+function generateMockSearchResults(query) {
+    return {
+        assistants: [
+            {
+                id: 1,
+                name: 'Code Assistant Pro',
+                description: 'Advanced programming assistant with multi-language support',
+                category: 'Programming',
+                usage_count: 1234,
+                rating: 4.8
+            },
+            {
+                id: 2,
+                name: 'Quantum Physics Tutor',
+                description: 'Expert quantum mechanics teacher and problem solver',
+                category: 'Education',
+                usage_count: 567,
+                rating: 4.9
             }
-        });
+        ],
+        plugins: [
+            {
+                id: 1,
+                name: 'Blockchain MCP',
+                description: 'Web3 and blockchain integration plugin',
+                author: 'Autogent Studio',
+                rating: 'A'
+            },
+            {
+                id: 2,
+                name: 'Quantum Circuit Designer',
+                description: 'Visual quantum circuit builder and simulator',
+                author: 'Quantum Labs',
+                rating: 'A'
+            }
+        ],
+        models: [
+            {
+                id: 1,
+                name: 'GPT-4o',
+                description: 'Latest OpenAI language model with multimodal capabilities',
+                provider: 'OpenAI'
+            }
+        ]
+    };
+}
+
+function displaySearchResults(results, container) {
+    let html = '';
+    
+    if (results.assistants.length > 0) {
+        html += `
+            <div class="search-result-section">
+                <h6 class="text-primary"><i class="fas fa-robot me-2"></i>AI Assistants</h6>
+                ${results.assistants.map(assistant => `
+                    <div class="search-result-item" onclick="openAssistant(${assistant.id})">
+                        <div class="result-header">
+                            <div>
+                                <div class="result-title">${assistant.name}</div>
+                                <div class="result-type">${assistant.category}</div>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted">${assistant.usage_count} uses</small>
+                                <div><i class="fas fa-star text-warning"></i> ${assistant.rating}</div>
+                            </div>
+                        </div>
+                        <div class="result-description">${assistant.description}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
     }
     
-    function viewPlugin(pluginId) {
-        window.location.href = `/discover/mcp/${pluginId}`;
+    if (results.plugins.length > 0) {
+        html += `
+            <div class="search-result-section">
+                <h6 class="text-success"><i class="fas fa-plug me-2"></i>Plugins</h6>
+                ${results.plugins.map(plugin => `
+                    <div class="search-result-item" onclick="openPlugin(${plugin.id})">
+                        <div class="result-header">
+                            <div>
+                                <div class="result-title">${plugin.name}</div>
+                                <div class="result-type">by ${plugin.author}</div>
+                            </div>
+                            <div>
+                                <span class="as-badge as-badge-${plugin.rating.toLowerCase()}">${plugin.rating}</span>
+                            </div>
+                        </div>
+                        <div class="result-description">${plugin.description}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
     }
     
-    function uploadPlugin() {
-        window.location.href = '/discover/plugin/upload';
+    if (results.models.length > 0) {
+        html += `
+            <div class="search-result-section">
+                <h6 class="text-warning"><i class="fas fa-brain me-2"></i>Models</h6>
+                ${results.models.map(model => `
+                    <div class="search-result-item" onclick="openModel(${model.id})">
+                        <div class="result-header">
+                            <div>
+                                <div class="result-title">${model.name}</div>
+                                <div class="result-type">${model.provider}</div>
+                            </div>
+                        </div>
+                        <div class="result-description">${model.description}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
     }
     
-    function useModel(modelId) {
-        // Set as default model and redirect to chat
-        window.location.href = `/chat?model=${modelId}`;
+    if (html === '') {
+        html = `
+            <div class="text-center py-4">
+                <i class="fas fa-search-minus fa-3x text-muted mb-3"></i>
+                <h5>No Results Found</h5>
+                <p class="text-muted">Try different keywords or browse categories</p>
+            </div>
+        `;
     }
     
-    function finetuneMeodel() {
-        window.location.href = '/fine-tuning';
+    container.innerHTML = html;
+}
+
+// Navigation functions
+function openAssistant(id) {
+    window.location.href = `/discover/assistant/${id}`;
+}
+
+function openPlugin(id) {
+    window.location.href = `/discover/mcp/${id}`;
+}
+
+function openModel(id) {
+    window.location.href = `/discover/model/${id}`;
+}
+
+// Search on Enter key
+document.getElementById('globalSearch').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        performGlobalSearch();
     }
-    
-    function useQuantumAlgorithm(algorithmType) {
-        window.location.href = `/quantum/algorithms?type=${algorithmType}`;
-    }
-    
-    function createQuantumAlgorithm() {
-        window.location.href = '/quantum/algorithms/create';
-    }
-    
-    function useNeuromorphicModel(modelType) {
-        window.location.href = `/neuromorphic/models?type=${modelType}`;
-    }
-    
-    function createNeuromorphicModel() {
-        window.location.href = '/neuromorphic/models/create';
-    }
+});
+
+// Category click handlers
+document.querySelectorAll('.category-card').forEach(card => {
+    card.addEventListener('click', function() {
+        const link = this.querySelector('a');
+        if (link) {
+            window.location.href = link.href;
+        }
+    });
+});
+
+// Assistant/Plugin card clicks
+document.querySelectorAll('.assistant-card').forEach(card => {
+    card.addEventListener('click', function() {
+        // Extract assistant ID and navigate
+        const assistantName = this.querySelector('.assistant-name').textContent;
+        window.autogentStudio.showNotification(`Opening ${assistantName}...`, 'info');
+    });
+});
+
+document.querySelectorAll('.plugin-card').forEach(card => {
+    card.addEventListener('click', function() {
+        // Extract plugin ID and navigate
+        const pluginName = this.querySelector('.plugin-name').textContent;
+        window.autogentStudio.showNotification(`Opening ${pluginName}...`, 'info');
+    });
+});
 </script>
 {% endblock %}
-

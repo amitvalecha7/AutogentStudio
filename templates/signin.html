@@ -3,230 +3,113 @@
 {% block title %}Sign In - Autogent Studio{% endblock %}
 
 {% block content %}
-<div class="auth-container">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-4">
-                <div class="auth-card p-4 rounded-3 shadow-lg bg-dark border">
-                    <!-- Logo -->
-                    <div class="text-center mb-4">
-                        <div class="auth-logo mb-3">
-                            <svg width="48" height="48" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="32" height="32" rx="8" fill="#6d73db"/>
-                                <path d="M8 16a8 8 0 1 1 16 0A8 8 0 0 1 8 16" fill="#8f96ff"/>
-                                <path d="M12 12h8v8h-8z" fill="#fff"/>
-                            </svg>
-                        </div>
-                        <h3 class="fw-bold text-primary">Welcome Back</h3>
-                        <p class="text-muted">Sign in to Autogent Studio</p>
-                    </div>
-                    
-                    <!-- Sign In Form -->
-                    <form method="POST" class="auth-form">
-                        <div class="mb-3">
-                            <label for="username" class="form-label">Username</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-dark border-secondary">
-                                    <i class="fas fa-user text-muted"></i>
-                                </span>
-                                <input type="text" class="form-control bg-dark border-secondary text-light" 
-                                       id="username" name="username" required 
-                                       placeholder="Enter your username">
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="password" class="form-label">Password</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-dark border-secondary">
-                                    <i class="fas fa-lock text-muted"></i>
-                                </span>
-                                <input type="password" class="form-control bg-dark border-secondary text-light" 
-                                       id="password" name="password" required 
-                                       placeholder="Enter your password">
-                                <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('password')">
-                                    <i class="fas fa-eye" id="passwordToggle"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3 form-check">
-                            <input type="checkbox" class="form-check-input" id="rememberMe">
-                            <label class="form-check-label text-muted" for="rememberMe">
-                                Remember me
-                            </label>
-                        </div>
-                        
-                        <div class="d-grid mb-3">
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="fas fa-sign-in-alt me-2"></i>Sign In
-                            </button>
-                        </div>
-                        
-                        <div class="text-center">
-                            <a href="{{ url_for('forgot_password') }}" class="text-decoration-none">
-                                Forgot your password?
-                            </a>
-                        </div>
-                    </form>
-                    
-                    <!-- Divider -->
-                    <div class="divider my-4">
-                        <span class="text-muted">or</span>
-                    </div>
-                    
-                    <!-- Social Sign In -->
-                    <div class="social-auth mb-4">
-                        <button class="btn btn-outline-light w-100 mb-2" disabled>
-                            <i class="fab fa-google me-2"></i>Continue with Google
-                            <small class="text-muted ms-2">(Coming Soon)</small>
-                        </button>
-                        <button class="btn btn-outline-light w-100 mb-2" disabled>
-                            <i class="fab fa-github me-2"></i>Continue with GitHub
-                            <small class="text-muted ms-2">(Coming Soon)</small>
-                        </button>
-                        <button class="btn btn-outline-light w-100" disabled>
-                            <i class="fab fa-microsoft me-2"></i>Continue with Microsoft
-                            <small class="text-muted ms-2">(Coming Soon)</small>
-                        </button>
-                    </div>
-                    
-                    <!-- Sign Up Link -->
-                    <div class="text-center">
-                        <p class="text-muted mb-0">
-                            Don't have an account? 
-                            <a href="{{ url_for('signup') }}" class="text-decoration-none text-primary">
-                                Create one here
-                            </a>
-                        </p>
-                    </div>
+<div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <div>
+            <div class="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-indigo-100">
+                <svg class="h-8 w-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                Sign in to Autogent Studio
+            </h2>
+            <p class="mt-2 text-center text-sm text-gray-600">
+                Access your AI development workspace
+            </p>
+        </div>
+        
+        <form class="mt-8 space-y-6" action="{{ url_for('auth.signin') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="rounded-md shadow-sm -space-y-px">
+                <div>
+                    <label for="email" class="sr-only">Email address</label>
+                    <input id="email" name="email" type="email" autocomplete="email" required 
+                           class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" 
+                           placeholder="Email address" value="{{ request.form.email or '' }}">
                 </div>
-                
-                <!-- Features Preview -->
-                <div class="auth-features mt-4 p-3 rounded-3 bg-dark-subtle">
-                    <h6 class="fw-bold mb-3 text-center">🚀 What's waiting for you:</h6>
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <div class="feature-item d-flex align-items-center">
-                                <i class="fas fa-atom text-primary me-2"></i>
-                                <small>Quantum Computing</small>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="feature-item d-flex align-items-center">
-                                <i class="fas fa-brain text-success me-2"></i>
-                                <small>Neuromorphic AI</small>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="feature-item d-flex align-items-center">
-                                <i class="fas fa-network-wired text-info me-2"></i>
-                                <small>Federated Learning</small>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="feature-item d-flex align-items-center">
-                                <i class="fas fa-shield-alt text-warning me-2"></i>
-                                <small>AI Safety</small>
-                            </div>
-                        </div>
-                    </div>
+                <div>
+                    <label for="password" class="sr-only">Password</label>
+                    <input id="password" name="password" type="password" autocomplete="current-password" required 
+                           class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" 
+                           placeholder="Password">
                 </div>
+            </div>
+
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <input id="remember-me" name="remember-me" type="checkbox" 
+                           class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    <label for="remember-me" class="ml-2 block text-sm text-gray-900">
+                        Remember me
+                    </label>
+                </div>
+
+                <div class="text-sm">
+                    <a href="{{ url_for('auth.forgot_password') }}" class="font-medium text-indigo-600 hover:text-indigo-500">
+                        Forgot your password?
+                    </a>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="rounded-md p-4 {% if category == 'error' %}bg-red-50 border border-red-200{% else %}bg-green-50 border border-green-200{% endif %}">
+                            <div class="flex">
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium {% if category == 'error' %}text-red-800{% else %}text-green-800{% endif %}">
+                                        {{ message }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div>
+                <button type="submit" 
+                        class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                    <span class="absolute left-0 inset-y-0 flex items-center pl-3">
+                        <svg class="h-5 w-5 text-indigo-500 group-hover:text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </span>
+                    Sign in
+                </button>
+            </div>
+
+            <div class="text-center">
+                <span class="text-sm text-gray-600">
+                    Don't have an account?
+                    <a href="{{ url_for('auth.signup') }}" class="font-medium text-indigo-600 hover:text-indigo-500">
+                        Sign up now
+                    </a>
+                </span>
+            </div>
+        </form>
+
+        <!-- Demo Login for Testing -->
+        <div class="mt-6 border-t border-gray-200 pt-6">
+            <div class="text-center">
+                <p class="text-xs text-gray-500 mb-3">Quick Demo Access</p>
+                <button onclick="fillDemoCredentials()" 
+                        class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    Use Demo Account
+                </button>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_scripts %}
 <script>
-function togglePassword(inputId) {
-    const passwordInput = document.getElementById(inputId);
-    const toggleIcon = document.getElementById(inputId + 'Toggle');
-    
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        toggleIcon.classList.remove('fa-eye');
-        toggleIcon.classList.add('fa-eye-slash');
-    } else {
-        passwordInput.type = 'password';
-        toggleIcon.classList.remove('fa-eye-slash');
-        toggleIcon.classList.add('fa-eye');
-    }
+function fillDemoCredentials() {
+    document.getElementById('email').value = 'demo@autogent.studio';
+    document.getElementById('password').value = 'demo123';
 }
-
-// Form validation and animation
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('.auth-form');
-    const inputs = form.querySelectorAll('input[required]');
-    
-    // Add real-time validation
-    inputs.forEach(input => {
-        input.addEventListener('blur', function() {
-            if (this.value.trim() === '') {
-                this.classList.add('is-invalid');
-            } else {
-                this.classList.remove('is-invalid');
-                this.classList.add('is-valid');
-            }
-        });
-        
-        input.addEventListener('input', function() {
-            if (this.classList.contains('is-invalid') && this.value.trim() !== '') {
-                this.classList.remove('is-invalid');
-                this.classList.add('is-valid');
-            }
-        });
-    });
-    
-    // Form submission
-    form.addEventListener('submit', function(e) {
-        let isValid = true;
-        
-        inputs.forEach(input => {
-            if (input.value.trim() === '') {
-                input.classList.add('is-invalid');
-                isValid = false;
-            }
-        });
-        
-        if (!isValid) {
-            e.preventDefault();
-            const firstInvalid = form.querySelector('.is-invalid');
-            if (firstInvalid) {
-                firstInvalid.focus();
-            }
-        } else {
-            // Show loading state
-            const submitBtn = form.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing In...';
-            submitBtn.disabled = true;
-            
-            // Re-enable after 5 seconds in case of network issues
-            setTimeout(() => {
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-            }, 5000);
-        }
-    });
-    
-    // Auto-focus first input
-    const firstInput = form.querySelector('input');
-    if (firstInput) {
-        firstInput.focus();
-    }
-    
-    // Add entrance animation
-    const authCard = document.querySelector('.auth-card');
-    authCard.style.opacity = '0';
-    authCard.style.transform = 'translateY(20px)';
-    
-    setTimeout(() => {
-        authCard.style.transition = 'all 0.5s ease-out';
-        authCard.style.opacity = '1';
-        authCard.style.transform = 'translateY(0)';
-    }, 100);
-});
 </script>
 {% endblock %}

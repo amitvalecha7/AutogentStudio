@@ -1,566 +1,360 @@
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from models import *
-from services.openai_service import OpenAIService
-from services.anthropic_service import AnthropicService
-from services.quantum_service import QuantumService
-from services.neuromorphic_service import NeuromorphicService
-from services.safety_service import SafetyService
-from services.blockchain_service import BlockchainService
-from utils.rag_processor import RAGProcessor
-from app import db
-import logging
-import json
-from datetime import datetime
+from models import ChatSession, ChatMessage, File, KnowledgeBase, db
+from services.ai_service import AIService
+from services.vector_service import VectorService
+from services.file_service import FileService
+import uuid
 
-api_bp = Blueprint('api', __name__)
+api_bp = Blueprint('api', __name__, url_prefix='/api')
 
-# Initialize services
-openai_service = OpenAIService()
-anthropic_service = AnthropicService()
-quantum_service = QuantumService()
-neuromorphic_service = NeuromorphicService()
-safety_service = SafetyService()
-blockchain_service = BlockchainService()
-rag_processor = RAGProcessor()
-
-@api_bp.route('/health')
-def health_check():
-    """API health check"""
-    return jsonify({
-        'status': 'healthy',
-        'service': 'Autogent Studio API',
-        'version': '1.0.0',
-        'timestamp': datetime.utcnow().isoformat()
-    })
-
-@api_bp.route('/chat/completions', methods=['POST'])
+# Chat API endpoints
+@api_bp.route('/chat/sessions', methods=['GET'])
 @login_required
-def chat_completions():
-    """OpenAI-compatible chat completions endpoint"""
-    try:
-        data = request.get_json()
-        
-        messages = data.get('messages', [])
-        model = data.get('model', 'gpt-4o')
-        temperature = data.get('temperature', 0.7)
-        max_tokens = data.get('max_tokens', 2000)
-        stream = data.get('stream', False)
-        
-        if not messages:
-            return jsonify({'error': 'Messages are required'}), 400
-        
-        # Get user settings for advanced features
-        settings = UserSettings.query.filter_by(user_id=current_user.id).first()
-        
-        # Safety check
-        if settings and settings.enable_safety_protocols:
-            for message in messages:
-                if message.get('role') == 'user':
-                    safety_result = safety_service.check_message_safety(message.get('content', ''))
-                    if not safety_result.get('safe', True):
-                        return jsonify({
-                            'error': 'Message blocked by safety protocols',
-                            'code': 'safety_violation'
-                        }), 400
-        
-        # Generate response based on model
-        if model.startswith('gpt-'):
-            response = openai_service.generate_response(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=stream
-            )
-        elif model.startswith('claude-'):
-            response = anthropic_service.generate_response(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
-        else:
-            return jsonify({'error': 'Unsupported model'}), 400
-        
-        # Apply advanced processing if enabled
-        if settings and settings.enable_quantum:
-            response = quantum_service.enhance_response(response)
-        
-        if settings and settings.enable_neuromorphic:
-            response = neuromorphic_service.process_response(response)
-        
-        # Safety scoring
-        safety_score = None
-        if settings and settings.enable_safety_protocols:
-            safety_result = safety_service.score_response(response)
-            safety_score = safety_result.get('score', 0.0)
-        
-        # Return OpenAI-compatible response
-        return jsonify({
-            'id': f'chatcmpl-{datetime.utcnow().timestamp()}',
-            'object': 'chat.completion',
-            'created': int(datetime.utcnow().timestamp()),
-            'model': model,
-            'choices': [{
-                'index': 0,
-                'message': {
-                    'role': 'assistant',
-                    'content': response
-                },
-                'finish_reason': 'stop'
-            }],
-            'usage': {
-                'prompt_tokens': sum(len(m.get('content', '').split()) for m in messages),
-                'completion_tokens': len(response.split()),
-                'total_tokens': sum(len(m.get('content', '').split()) for m in messages) + len(response.split())
-            },
-            'autogent_metadata': {
-                'safety_score': safety_score,
-                'quantum_enhanced': settings.enable_quantum if settings else False,
-                'neuromorphic_processed': settings.enable_neuromorphic if settings else False
-            }
-        })
-        
-    except Exception as e:
-        logging.error(f"Error in chat completions: {str(e)}")
-        return jsonify({'error': 'Failed to generate response'}), 500
-
-@api_bp.route('/embeddings', methods=['POST'])
-@login_required
-def embeddings():
-    """Generate embeddings for text"""
-    try:
-        data = request.get_json()
-        
-        input_text = data.get('input', '')
-        model = data.get('model', 'text-embedding-3-small')
-        
-        if not input_text:
-            return jsonify({'error': 'Input text is required'}), 400
-        
-        # Generate embeddings
-        embeddings = rag_processor.generate_embeddings(input_text, model)
-        
-        return jsonify({
-            'object': 'list',
-            'data': [{
-                'object': 'embedding',
-                'embedding': embeddings,
-                'index': 0
-            }],
-            'model': model,
-            'usage': {
-                'prompt_tokens': len(input_text.split()),
-                'total_tokens': len(input_text.split())
-            }
-        })
-        
-    except Exception as e:
-        logging.error(f"Error generating embeddings: {str(e)}")
-        return jsonify({'error': 'Failed to generate embeddings'}), 500
-
-@api_bp.route('/semantic-search', methods=['POST'])
-@login_required
-def semantic_search():
-    """Semantic search endpoint"""
-    try:
-        data = request.get_json()
-        
-        query = data.get('query', '')
-        file_ids = data.get('file_ids', [])
-        limit = data.get('limit', 10)
-        threshold = data.get('threshold', 0.7)
-        
-        if not query:
-            return jsonify({'error': 'Query is required'}), 400
-        
-        # Perform semantic search
-        results = rag_processor.semantic_search(
-            query=query,
-            user_id=current_user.id,
-            file_ids=file_ids,
-            limit=limit,
-            threshold=threshold
-        )
-        
-        return jsonify({
-            'query': query,
-            'results': results,
-            'total_results': len(results)
-        })
-        
-    except Exception as e:
-        logging.error(f"Error in semantic search: {str(e)}")
-        return jsonify({'error': 'Failed to perform semantic search'}), 500
-
-@api_bp.route('/quantum/enhance', methods=['POST'])
-@login_required
-def quantum_enhance():
-    """Quantum enhancement endpoint"""
-    try:
-        data = request.get_json()
-        
-        text = data.get('text', '')
-        enhancement_type = data.get('enhancement_type', 'optimization')
-        
-        if not text:
-            return jsonify({'error': 'Text is required'}), 400
-        
-        # Check quantum access
-        settings = UserSettings.query.filter_by(user_id=current_user.id).first()
-        if not settings or not settings.enable_quantum:
-            return jsonify({'error': 'Quantum enhancement not enabled'}), 403
-        
-        # Apply quantum enhancement
-        enhanced_text = quantum_service.enhance_response(text, enhancement_type)
-        
-        return jsonify({
-            'original_text': text,
-            'enhanced_text': enhanced_text,
-            'enhancement_type': enhancement_type,
-            'quantum_processed': True
-        })
-        
-    except Exception as e:
-        logging.error(f"Error in quantum enhancement: {str(e)}")
-        return jsonify({'error': 'Failed to apply quantum enhancement'}), 500
-
-@api_bp.route('/neuromorphic/process', methods=['POST'])
-@login_required
-def neuromorphic_process():
-    """Neuromorphic processing endpoint"""
-    try:
-        data = request.get_json()
-        
-        input_data = data.get('input_data', [])
-        processing_type = data.get('processing_type', 'classification')
-        
-        if not input_data:
-            return jsonify({'error': 'Input data is required'}), 400
-        
-        # Check neuromorphic access
-        settings = UserSettings.query.filter_by(user_id=current_user.id).first()
-        if not settings or not settings.enable_neuromorphic:
-            return jsonify({'error': 'Neuromorphic processing not enabled'}), 403
-        
-        # Process with neuromorphic computing
-        results = neuromorphic_service.process_data(
-            input_data=input_data,
-            processing_type=processing_type
-        )
-        
-        return jsonify({
-            'input_data': input_data,
-            'processing_type': processing_type,
-            'results': results,
-            'neuromorphic_processed': True
-        })
-        
-    except Exception as e:
-        logging.error(f"Error in neuromorphic processing: {str(e)}")
-        return jsonify({'error': 'Failed to process with neuromorphic computing'}), 500
-
-@api_bp.route('/safety/check', methods=['POST'])
-@login_required
-def safety_check():
-    """Safety checking endpoint"""
-    try:
-        data = request.get_json()
-        
-        content = data.get('content', '')
-        check_type = data.get('check_type', 'comprehensive')
-        
-        if not content:
-            return jsonify({'error': 'Content is required'}), 400
-        
-        # Perform safety check
-        results = safety_service.check_content_safety(content, check_type)
-        
-        return jsonify({
-            'content': content,
-            'check_type': check_type,
-            'results': results
-        })
-        
-    except Exception as e:
-        logging.error(f"Error in safety check: {str(e)}")
-        return jsonify({'error': 'Failed to perform safety check'}), 500
-
-@api_bp.route('/federated/train', methods=['POST'])
-@login_required
-def federated_train():
-    """Federated learning training endpoint"""
-    try:
-        data = request.get_json()
-        
-        model_config = data.get('model_config', {})
-        training_data = data.get('training_data', [])
-        node_ids = data.get('node_ids', [])
-        
-        if not model_config or not training_data:
-            return jsonify({'error': 'Model config and training data are required'}), 400
-        
-        # Check federated access
-        settings = UserSettings.query.filter_by(user_id=current_user.id).first()
-        if not settings or not settings.enable_federated:
-            return jsonify({'error': 'Federated learning not enabled'}), 403
-        
-        # Start federated training
-        from services.federated_service import FederatedService
-        federated_service = FederatedService()
-        
-        training_result = federated_service.start_federated_training(
-            user_id=current_user.id,
-            model_config=model_config,
-            training_data=training_data,
-            node_ids=node_ids
-        )
-        
-        return jsonify({
-            'training_id': training_result['training_id'],
-            'status': 'started',
-            'participating_nodes': len(node_ids)
-        })
-        
-    except Exception as e:
-        logging.error(f"Error in federated training: {str(e)}")
-        return jsonify({'error': 'Failed to start federated training'}), 500
-
-@api_bp.route('/blockchain/transaction', methods=['POST'])
-@login_required
-def blockchain_transaction():
-    """Blockchain transaction endpoint"""
-    try:
-        data = request.get_json()
-        
-        transaction_type = data.get('transaction_type')
-        amount = data.get('amount')
-        currency = data.get('currency', 'ETH')
-        to_address = data.get('to_address')
-        
-        if not transaction_type or not amount:
-            return jsonify({'error': 'Transaction type and amount are required'}), 400
-        
-        # Create blockchain transaction
-        result = blockchain_service.create_transaction(
-            user_id=current_user.id,
-            transaction_type=transaction_type,
-            amount=amount,
-            currency=currency,
-            to_address=to_address
-        )
-        
-        return jsonify({
-            'transaction_hash': result['transaction_hash'],
-            'status': 'pending',
-            'amount': amount,
-            'currency': currency
-        })
-        
-    except Exception as e:
-        logging.error(f"Error in blockchain transaction: {str(e)}")
-        return jsonify({'error': 'Failed to create blockchain transaction'}), 500
-
-@api_bp.route('/models', methods=['GET'])
-@login_required
-def list_models():
-    """List available models"""
-    models = [
-        {
-            'id': 'gpt-4o',
-            'object': 'model',
-            'created': 1640995200,
-            'owned_by': 'openai',
-            'capabilities': ['text', 'vision', 'function_calling'],
-            'context_length': 128000,
-            'supports_quantum': True,
-            'supports_neuromorphic': True
-        },
-        {
-            'id': 'gpt-4o-mini',
-            'object': 'model',
-            'created': 1640995200,
-            'owned_by': 'openai',
-            'capabilities': ['text', 'vision', 'function_calling'],
-            'context_length': 128000,
-            'supports_quantum': True,
-            'supports_neuromorphic': True
-        },
-        {
-            'id': 'claude-sonnet-4-20250514',
-            'object': 'model',
-            'created': 1640995200,
-            'owned_by': 'anthropic',
-            'capabilities': ['text', 'vision', 'function_calling'],
-            'context_length': 200000,
-            'supports_quantum': True,
-            'supports_neuromorphic': True
-        },
-        {
-            'id': 'claude-3-7-sonnet-20250219',
-            'object': 'model',
-            'created': 1640995200,
-            'owned_by': 'anthropic',
-            'capabilities': ['text', 'vision', 'function_calling'],
-            'context_length': 200000,
-            'supports_quantum': True,
-            'supports_neuromorphic': True
-        }
-    ]
+def get_chat_sessions():
+    sessions = ChatSession.query.filter_by(
+        user_id=current_user.id,
+        is_active=True
+    ).order_by(ChatSession.updated_at.desc()).all()
     
     return jsonify({
-        'object': 'list',
-        'data': models
+        'sessions': [{
+            'id': session.id,
+            'title': session.title,
+            'model_provider': session.model_provider,
+            'model_name': session.model_name,
+            'created_at': session.created_at.isoformat(),
+            'updated_at': session.updated_at.isoformat()
+        } for session in sessions]
     })
 
-@api_bp.route('/user/stats', methods=['GET'])
+@api_bp.route('/chat/<session_id>/messages', methods=['GET'])
 @login_required
-def user_stats():
-    """Get user statistics"""
+def get_chat_messages(session_id):
+    session = ChatSession.query.filter_by(
+        id=session_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    messages = ChatMessage.query.filter_by(
+        session_id=session_id
+    ).order_by(ChatMessage.created_at.asc()).all()
+    
+    return jsonify({
+        'messages': [{
+            'id': message.id,
+            'role': message.role,
+            'content': message.content,
+            'metadata': message.metadata,
+            'created_at': message.created_at.isoformat()
+        } for message in messages]
+    })
+
+@api_bp.route('/chat/stream', methods=['POST'])
+@login_required
+def stream_chat():
+    data = request.get_json()
+    
+    session_id = data.get('session_id')
+    message = data.get('message')
+    
+    if not session_id or not message:
+        return jsonify({'error': 'session_id and message are required'}), 400
+    
+    session = ChatSession.query.filter_by(
+        id=session_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
     try:
-        # Basic statistics
-        conversations_count = Conversation.query.filter_by(user_id=current_user.id).count()
-        messages_count = db.session.query(Message).join(Conversation).filter(
-            Conversation.user_id == current_user.id
-        ).count()
-        files_count = File.query.filter_by(user_id=current_user.id).count()
+        ai_service = AIService()
         
-        # Advanced features usage
-        quantum_jobs = QuantumJob.query.filter_by(user_id=current_user.id).count()
-        federated_nodes = FederatedNode.query.filter_by(user_id=current_user.id).count()
-        neuromorphic_devices = NeuromorphicDevice.query.filter_by(user_id=current_user.id).count()
+        # Get conversation history
+        messages = ChatMessage.query.filter_by(
+            session_id=session_id
+        ).order_by(ChatMessage.created_at.asc()).all()
         
-        # Safety statistics
-        safety_messages = db.session.query(Message).join(Conversation).filter(
-            Conversation.user_id == current_user.id,
-            Message.safety_score.isnot(None)
-        ).count()
+        conversation_history = []
+        if session.system_prompt:
+            conversation_history.append({
+                'role': 'system',
+                'content': session.system_prompt
+            })
         
-        avg_safety_score = db.session.query(
-            func.avg(Message.safety_score)
-        ).join(Conversation).filter(
-            Conversation.user_id == current_user.id,
-            Message.safety_score.isnot(None)
-        ).scalar() or 0
+        for msg in messages:
+            conversation_history.append({
+                'role': msg.role,
+                'content': msg.content
+            })
         
-        return jsonify({
-            'conversations': conversations_count,
-            'messages': messages_count,
-            'files': files_count,
-            'quantum_jobs': quantum_jobs,
-            'federated_nodes': federated_nodes,
-            'neuromorphic_devices': neuromorphic_devices,
-            'safety_messages': safety_messages,
-            'avg_safety_score': float(avg_safety_score)
+        conversation_history.append({
+            'role': 'user',
+            'content': message
         })
         
-    except Exception as e:
-        logging.error(f"Error getting user stats: {str(e)}")
-        return jsonify({'error': 'Failed to get user statistics'}), 500
-
-@api_bp.route('/workflow/execute', methods=['POST'])
-@login_required
-def execute_workflow():
-    """Execute workflow via API"""
-    try:
-        data = request.get_json()
-        
-        workflow_id = data.get('workflow_id')
-        inputs = data.get('inputs', {})
-        
-        if not workflow_id:
-            return jsonify({'error': 'Workflow ID is required'}), 400
-        
-        # Get workflow
-        workflow = Workflow.query.filter_by(
-            id=workflow_id,
-            user_id=current_user.id
-        ).first()
-        
-        if not workflow:
-            return jsonify({'error': 'Workflow not found'}), 404
-        
-        # Execute workflow
-        from services.orchestration_service import OrchestrationService
-        orchestration_service = OrchestrationService()
-        
-        result = orchestration_service.execute_workflow(workflow, inputs)
-        
-        return jsonify({
-            'workflow_id': workflow_id,
-            'execution_result': result,
-            'status': 'completed' if result.get('success') else 'failed'
-        })
-        
-    except Exception as e:
-        logging.error(f"Error executing workflow: {str(e)}")
-        return jsonify({'error': 'Failed to execute workflow'}), 500
-
-@api_bp.route('/research/generate-hypothesis', methods=['POST'])
-@login_required
-def generate_hypothesis():
-    """Generate research hypothesis"""
-    try:
-        data = request.get_json()
-        
-        research_area = data.get('research_area')
-        existing_knowledge = data.get('existing_knowledge', [])
-        
-        if not research_area:
-            return jsonify({'error': 'Research area is required'}), 400
-        
-        # Check self-improving access
-        settings = UserSettings.query.filter_by(user_id=current_user.id).first()
-        if not settings or not settings.enable_self_improving:
-            return jsonify({'error': 'Self-improving AI not enabled'}), 403
-        
-        # Generate hypothesis using AI
-        prompt = f"""
-        Generate a novel research hypothesis in {research_area}.
-        
-        Existing knowledge: {json.dumps(existing_knowledge)}
-        
-        Provide a JSON response with:
-        - hypothesis: Clear, testable hypothesis
-        - rationale: Scientific reasoning
-        - methodology: Suggested research approach
-        - expected_outcomes: Predicted results
-        """
-        
-        response = openai_service.generate_response(
-            messages=[{'role': 'user', 'content': prompt}],
-            model='gpt-4o',
-            temperature=0.7
+        # Stream response
+        response_generator = ai_service.stream_chat_completion(
+            messages=conversation_history,
+            provider=session.model_provider,
+            model=session.model_name,
+            settings=session.settings
         )
         
-        try:
-            hypothesis_data = json.loads(response)
-        except json.JSONDecodeError:
-            hypothesis_data = {'hypothesis': response}
+        def generate():
+            full_response = ""
+            for chunk in response_generator:
+                full_response += chunk.get('content', '')
+                yield f"data: {jsonify(chunk).get_data(as_text=True)}\n\n"
+            
+            # Save messages to database
+            user_msg = ChatMessage(
+                id=str(uuid.uuid4()),
+                session_id=session_id,
+                role='user',
+                content=message
+            )
+            
+            ai_msg = ChatMessage(
+                id=str(uuid.uuid4()),
+                session_id=session_id,
+                role='assistant',
+                content=full_response
+            )
+            
+            db.session.add(user_msg)
+            db.session.add(ai_msg)
+            db.session.commit()
         
-        return jsonify({
-            'research_area': research_area,
-            'generated_hypothesis': hypothesis_data,
-            'generated_at': datetime.utcnow().isoformat()
-        })
+        return generate(), 200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache'
+        }
         
     except Exception as e:
-        logging.error(f"Error generating hypothesis: {str(e)}")
-        return jsonify({'error': 'Failed to generate hypothesis'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@api_bp.errorhandler(404)
-def api_not_found(error):
-    return jsonify({'error': 'API endpoint not found'}), 404
+# Files API endpoints
+@api_bp.route('/files', methods=['GET'])
+@login_required
+def get_files():
+    files = File.query.filter_by(
+        user_id=current_user.id
+    ).order_by(File.created_at.desc()).all()
+    
+    return jsonify({
+        'files': [{
+            'id': file.id,
+            'filename': file.original_filename,
+            'file_type': file.file_type,
+            'file_size': file.file_size,
+            'is_processed': file.is_processed,
+            'processing_status': file.processing_status,
+            'created_at': file.created_at.isoformat()
+        } for file in files]
+    })
 
-@api_bp.errorhandler(500)
-def api_internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
+@api_bp.route('/files/<file_id>/process', methods=['POST'])
+@login_required
+def process_file(file_id):
+    file = File.query.filter_by(
+        id=file_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    try:
+        file_service = FileService()
+        result = file_service.process_file(file_id)
+        
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-@api_bp.errorhandler(403)
-def api_forbidden(error):
-    return jsonify({'error': 'Access forbidden'}), 403
+# Knowledge Base API endpoints
+@api_bp.route('/knowledge-base', methods=['GET'])
+@login_required
+def get_knowledge_bases():
+    kbs = KnowledgeBase.query.filter_by(
+        user_id=current_user.id
+    ).order_by(KnowledgeBase.updated_at.desc()).all()
+    
+    return jsonify({
+        'knowledge_bases': [{
+            'id': kb.id,
+            'name': kb.name,
+            'description': kb.description,
+            'file_count': kb.file_count,
+            'total_chunks': kb.total_chunks,
+            'created_at': kb.created_at.isoformat(),
+            'updated_at': kb.updated_at.isoformat()
+        } for kb in kbs]
+    })
 
-@api_bp.errorhandler(401)
-def api_unauthorized(error):
-    return jsonify({'error': 'Authentication required'}), 401
+@api_bp.route('/knowledge-base/<kb_id>/query', methods=['POST'])
+@login_required
+def query_knowledge_base(kb_id):
+    kb = KnowledgeBase.query.filter_by(
+        id=kb_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    data = request.get_json()
+    query = data.get('query', '').strip()
+    
+    if not query:
+        return jsonify({'error': 'Query is required'}), 400
+    
+    try:
+        vector_service = VectorService()
+        results = vector_service.search_knowledge_base(kb, query)
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Settings API endpoints
+@api_bp.route('/settings', methods=['GET'])
+@login_required
+def get_settings():
+    return jsonify({
+        'user_id': current_user.id,
+        'preferences': current_user.preferences or {},
+        'subscription_tier': current_user.subscription_tier
+    })
+
+@api_bp.route('/settings', methods=['POST'])
+@login_required
+def update_settings():
+    data = request.get_json()
+    
+    if 'preferences' in data:
+        current_user.preferences = data['preferences']
+    
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
+# Model provider API endpoints
+@api_bp.route('/models', methods=['GET'])
+@login_required
+def get_models():
+    from models import AIModel
+    
+    models = AIModel.query.filter_by(is_active=True).all()
+    
+    models_by_provider = {}
+    for model in models:
+        if model.provider not in models_by_provider:
+            models_by_provider[model.provider] = []
+        models_by_provider[model.provider].append({
+            'id': model.id,
+            'name': model.name,
+            'model_type': model.model_type,
+            'capabilities': model.capabilities,
+            'max_tokens': model.max_tokens,
+            'cost_per_token_input': model.cost_per_token_input,
+            'cost_per_token_output': model.cost_per_token_output
+        })
+    
+    return jsonify({
+        'models_by_provider': models_by_provider
+    })
+
+# Analytics API endpoints
+@api_bp.route('/analytics/usage', methods=['GET'])
+@login_required
+def get_usage_analytics():
+    # Get user's usage statistics
+    from models import UsageMetrics
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=30)
+    
+    # Total messages
+    total_messages = ChatMessage.query.join(ChatSession).filter(
+        ChatSession.user_id == current_user.id,
+        ChatMessage.created_at >= start_date
+    ).count()
+    
+    # Total tokens used
+    total_tokens = db.session.query(func.sum(ChatMessage.tokens_used)).join(ChatSession).filter(
+        ChatSession.user_id == current_user.id,
+        ChatMessage.created_at >= start_date
+    ).scalar() or 0
+    
+    # Total cost
+    total_cost = db.session.query(func.sum(ChatMessage.cost)).join(ChatSession).filter(
+        ChatSession.user_id == current_user.id,
+        ChatMessage.created_at >= start_date
+    ).scalar() or 0.0
+    
+    # Files uploaded
+    files_uploaded = File.query.filter(
+        File.user_id == current_user.id,
+        File.created_at >= start_date
+    ).count()
+    
+    return jsonify({
+        'period': '30_days',
+        'total_messages': total_messages,
+        'total_tokens': int(total_tokens),
+        'total_cost': float(total_cost),
+        'files_uploaded': files_uploaded
+    })
+
+# Plugin development API endpoints
+@api_bp.route('/plugins', methods=['GET'])
+@login_required
+def get_plugins():
+    from models import Plugin
+    
+    plugins = Plugin.query.filter_by(is_featured=True).all()
+    
+    return jsonify({
+        'plugins': [{
+            'id': plugin.id,
+            'name': plugin.name,
+            'description': plugin.description,
+            'category': plugin.category,
+            'version': plugin.version,
+            'author': plugin.author,
+            'installation_type': plugin.installation_type,
+            'download_count': plugin.download_count,
+            'rating': plugin.rating
+        } for plugin in plugins]
+    })
+
+# Mobile API endpoints
+@api_bp.route('/mobile/sync', methods=['POST'])
+@login_required
+def mobile_sync():
+    # Sync data for mobile app
+    data = request.get_json()
+    last_sync = data.get('last_sync')
+    
+    # Get updated data since last sync
+    # This would include sessions, messages, files, etc.
+    
+    return jsonify({
+        'success': True,
+        'sync_timestamp': datetime.utcnow().isoformat(),
+        'updated_sessions': [],
+        'updated_messages': [],
+        'updated_files': []
+    })
+
+# Health check endpoint
+@api_bp.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'version': '1.0.0'
+    })

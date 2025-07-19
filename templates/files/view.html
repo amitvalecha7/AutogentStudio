@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}{{ file.original_filename }} - Files - Autogent Studio{% endblock %}
+
+{% block content %}
+<div class="file-viewer-container">
+    <div class="file-viewer-header">
+        <div class="file-info">
+            <div class="file-icon">
+                <i class="{{ get_file_icon(file.original_filename) }}"></i>
+            </div>
+            <div class="file-details">
+                <h4 class="file-name">{{ file.original_filename }}</h4>
+                <div class="file-meta">
+                    <span class="file-size">{{ format_file_size(file.file_size) }}</span>
+                    <span class="separator">•</span>
+                    <span class="file-date">{{ file.created_at.strftime('%B %d, %Y at %I:%M %p') }}</span>
+                    {% if file.knowledge_base %}
+                    <span class="separator">•</span>
+                    <span class="kb-badge">
+                        <i class="fas fa-database me-1"></i>{{ file.knowledge_base.name }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="file-actions">
+            <button class="btn btn-outline-secondary" onclick="downloadFile()">
+                <i class="fas fa-download me-2"></i>Download
+            </button>
+            <button class="btn btn-outline-primary" onclick="addToChat()">
+                <i class="fas fa-comments me-2"></i>Use in Chat
+            </button>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" onclick="addToKnowledgeBase()">
+                        <i class="fas fa-database me-2"></i>Add to Knowledge Base
+                    </a></li>
+                    <li><a class="dropdown-item" href="#" onclick="reprocessFile()">
+                        <i class="fas fa-sync me-2"></i>Reprocess
+                    </a></li>
+                    <li><a class="dropdown-item" href="#" onclick="shareFile()">
+                        <i class="fas fa-share me-2"></i>Share
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger" href="#" onclick="deleteFile()">
+                        <i class="fas fa-trash me-2"></i>Delete
+                    </a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="file-viewer-content">
+        <div class="viewer-tabs">
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#preview-tab" type="button" role="tab">
+                        <i class="fas fa-eye me-2"></i>Preview
+                    </button>
+                </li>
+                {% if file.processing_status == 'completed' and file.chunk_count > 0 %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#chunks-tab" type="button" role="tab">
+                        <i class="fas fa-puzzle-piece me-2"></i>Chunks ({{ file.chunk_count }})
+                    </button>
+                </li>
+                {% endif %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#analysis-tab" type="button" role="tab">
+                        <i class="fas fa-chart-bar me-2"></i>Analysis
+                    </button>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="tab-content">
+            <!-- Preview Tab -->
+            <div class="tab-pane fade show active" id="preview-tab" role="tabpanel">
+                <div class="file-preview-container">
+                    {% if file.content_type.startswith('text/') or file.original_filename.endswith('.txt') %}
+                        <div class="text-preview">
+                            <pre>{{ get_file_preview(file.id) or 'Preview not available' }}</pre>
+                        </div>
+                    {% elif file.content_type == 'application/pdf' %}
+                        <div class="pdf-preview">
+                            <div class="preview-placeholder">
+                                <i class="fas fa-file-pdf fa-4x text-danger mb-3"></i>
+                                <h5>PDF Document</h5>
+                                <p class="text-muted">{{ get_file_preview(file.id) or 'PDF preview not available' }}</p>
+                                <button class="btn btn-primary" onclick="downloadFile()">
+                                    <i class="fas fa-download me-2"></i>Download to View
+                                </button>
+                            </div>
+                        </div>
+                    {% elif file.content_type.startswith('image/') %}
+                        <div class="image-preview">
+                            <img src="{{ url_for('static', filename='uploads/' + file.filename) }}" alt="{{ file.original_filename }}" class="img-fluid">
+                        </div>
+                    {% else %}
+                        <div class="preview-placeholder">
+                            <i class="fas fa-file fa-4x text-muted mb-3"></i>
+                            <h5>File Preview Not Available</h5>
+                            <p class="text-muted">This file type cannot be previewed in the browser</p>
+                            <button class="btn btn-primary" onclick="downloadFile()">
+                                <i class="fas fa-download me-2"></i>Download File
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Chunks Tab -->
+            {% if file.processing_status == 'completed' and file.chunk_count > 0 %}
+            <div class="tab-pane fade" id="chunks-tab" role="tabpanel">
+                <div class="chunks-container">
+                    <div class="chunks-header">
+                        <h6>Document Chunks</h6>
+                        <div class="chunks-controls">
+                            <input type="text" class="form-control form-control-sm" placeholder="Search chunks..." id="chunkSearch">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="searchChunks()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="chunks-list" id="chunksList">
+                        {% for chunk in file.chunks %}
+                        <div class="chunk-item">
+                            <div class="chunk-header">
+                                <span class="chunk-index">Chunk {{ chunk.chunk_index + 1 }}</span>
+                                <div class="chunk-actions">
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="copyChunk({{ chunk.chunk_index }})">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="useChunkInChat({{ chunk.chunk_index }})">
+                                        <i class="fas fa-comments"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="chunk-content">
+                                <p>{{ chunk.content }}</p>
+                            </div>
+                            {% if chunk.metadata %}
+                            <div class="chunk-metadata">
+                                <small class="text-muted">
+                                    Size: {{ chunk.metadata.get('chunk_size', 'Unknown') }} characters
+                                    {% if chunk.metadata.get('embedding_model') %}
+                                    • Embedding: {{ chunk.metadata.get('embedding_model') }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Analysis Tab -->
+            <div class="tab-pane fade" id="analysis-tab" role="tabpanel">
+                <div class="analysis-container">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="analysis-card">
+                                <h6><i class="fas fa-info-circle me-2"></i>File Information</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td>File Size</td>
+                                        <td>{{ format_file_size(file.file_size) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Content Type</td>
+                                        <td>{{ file.content_type }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Upload Date</td>
+                                        <td>{{ file.created_at.strftime('%B %d, %Y at %I:%M %p') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Processing Status</td>
+                                        <td>
+                                            <span class="badge {{ 'bg-success' if file.processing_status == 'completed' else 'bg-warning' }}">
+                                                {{ file.processing_status.title() }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="analysis-card">
+                                <h6><i class="fas fa-chart-bar me-2"></i>Processing Statistics</h6>
+                                <table class="table table-sm">
+                                    {% if file.chunk_count %}
+                                    <tr>
+                                        <td>Total Chunks</td>
+                                        <td>{{ file.chunk_count }}</td>
+                                    </tr>
+                                    {% endif %}
+                                    {% if file.knowledge_base %}
+                                    <tr>
+                                        <td>Knowledge Base</td>
+                                        <td>{{ file.knowledge_base.name }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Embedding Model</td>
+                                        <td>{{ file.knowledge_base.embedding_model }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Chunk Size</td>
+                                        <td>{{ file.knowledge_base.chunk_size }} tokens</td>
+                                    </tr>
+                                    {% endif %}
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if file.processing_status == 'completed' and file.chunk_count > 0 %}
+                    <div class="analysis-card mt-3">
+                        <h6><i class="fas fa-search me-2"></i>Semantic Search Test</h6>
+                        <div class="search-test-container">
+                            <div class="input-group">
+                                <input type="text" class="form-control" placeholder="Enter a query to test semantic search..." id="semanticQuery">
+                                <button class="btn btn-primary" onclick="testSemanticSearch()">
+                                    <i class="fas fa-search me-2"></i>Search
+                                </button>
+                            </div>
+                            <div class="search-results mt-3" id="semanticResults" style="display: none;">
+                                <!-- Results will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const fileId = '{{ file.id }}';
+
+function downloadFile() {
+    // Create a temporary link to download the file
+    const link = document.createElement('a');
+    link.href = '{{ url_for("static", filename="uploads/" + file.filename) }}';
+    link.download = '{{ file.original_filename }}';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function addToChat() {
+    // Open new chat with this file context
+    window.open('{{ url_for("chat.index") }}?file=' + fileId, '_blank');
+}
+
+function addToKnowledgeBase() {
+    // Show modal to select knowledge base
+    console.log('Add to knowledge base');
+}
+
+function reprocessFile() {
+    if (confirm('Reprocess this file? This will regenerate all chunks and embeddings.')) {
+        // Implement reprocessing
+        console.log('Reprocess file');
+    }
+}
+
+function shareFile() {
+    // Generate share link
+    const shareUrl = window.location.href;
+    navigator.clipboard.writeText(shareUrl);
+    alert('Share link copied to clipboard!');
+}
+
+function deleteFile() {
+    if (confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+        fetch('{{ url_for("files.delete_file", file_id=file.id) }}', {
+            method: 'POST'
+        })
+        .then(response => {
+            if (response.ok) {
+                window.location.href = '{{ url_for("files.index") }}';
+            } else {
+                alert('Failed to delete file');
+            }
+        });
+    }
+}
+
+function searchChunks() {
+    const query = document.getElementById('chunkSearch').value.toLowerCase();
+    const chunks = document.querySelectorAll('.chunk-item');
+    
+    chunks.forEach(chunk => {
+        const content = chunk.querySelector('.chunk-content p').textContent.toLowerCase();
+        const isVisible = content.includes(query);
+        chunk.style.display = isVisible ? 'block' : 'none';
+    });
+}
+
+function copyChunk(chunkIndex) {
+    const chunkContent = document.querySelectorAll('.chunk-content p')[chunkIndex].textContent;
+    navigator.clipboard.writeText(chunkContent);
+    
+    // Show feedback
+    const button = event.target.closest('button');
+    const originalIcon = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-check text-success"></i>';
+    setTimeout(() => {
+        button.innerHTML = originalIcon;
+    }, 1000);
+}
+
+function useChunkInChat(chunkIndex) {
+    const chunkContent = document.querySelectorAll('.chunk-content p')[chunkIndex].textContent;
+    // Open chat with chunk content pre-filled
+    window.open('{{ url_for("chat.index") }}?content=' + encodeURIComponent(chunkContent), '_blank');
+}
+
+function testSemanticSearch() {
+    const query = document.getElementById('semanticQuery').value;
+    if (!query.trim()) {
+        alert('Please enter a search query');
+        return;
+    }
+    
+    // Show loading
+    const resultsDiv = document.getElementById('semanticResults');
+    resultsDiv.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Searching...</div>';
+    resultsDiv.style.display = 'block';
+    
+    // Perform search
+    fetch('{{ url_for("files.search_files") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            query: query,
+            file_id: fileId,
+            limit: 5
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        displaySemanticResults(data.results);
+    })
+    .catch(error => {
+        resultsDiv.innerHTML = '<div class="alert alert-danger">Search failed: ' + error.message + '</div>';
+    });
+}
+
+function displaySemanticResults(results) {
+    const resultsDiv = document.getElementById('semanticResults');
+    
+    if (results.length === 0) {
+        resultsDiv.innerHTML = '<div class="alert alert-info">No results found for your query.</div>';
+        return;
+    }
+    
+    let html = '<div class="semantic-results">';
+    results.forEach((result, index) => {
+        html += `
+            <div class="result-item">
+                <div class="result-header">
+                    <span class="result-rank">#${index + 1}</span>
+                    <span class="badge bg-primary">${(result.similarity * 100).toFixed(1)}% match</span>
+                </div>
+                <div class="result-content">
+                    <p>${result.content.substring(0, 200)}...</p>
+                </div>
+                <div class="result-actions">
+                    <button class="btn btn-sm btn-outline-primary" onclick="copyChunk(${result.chunk_index})">
+                        <i class="fas fa-copy me-1"></i>Copy
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="useChunkInChat(${result.chunk_index})">
+                        <i class="fas fa-comments me-1"></i>Use in Chat
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    resultsDiv.innerHTML = html;
+}
+
+// Auto-search chunks as user types
+document.getElementById('chunkSearch')?.addEventListener('input', function() {
+    clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(searchChunks, 300);
+});
+
+// Test semantic search on Enter key
+document.getElementById('semanticQuery')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        testSemanticSearch();
+    }
+});
+</script>
+{% endblock %}

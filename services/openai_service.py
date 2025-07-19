@@ -4,119 +4,99 @@ from openai import OpenAI
 
 class OpenAIService:
     def __init__(self):
-        api_key = os.environ.get('OPENAI_API_KEY')
-        if not api_key:
-            logging.warning("OpenAI API key not found in environment variables")
-            self.client = None
-        else:
-            self.client = OpenAI(api_key=api_key)
-    
-    def chat_completion(self, message, model='gpt-4o', temperature=0.7, max_tokens=2000):
-        """
-        Get chat completion from OpenAI
         # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
         # do not change this unless explicitly requested by the user
-        """
-        if not self.client:
-            raise Exception("OpenAI client not initialized - API key missing")
+        self.api_key = os.environ.get('OPENAI_API_KEY')
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY environment variable must be set")
+        
+        self.client = OpenAI(api_key=self.api_key)
+        self.default_model = "gpt-4o"
+    
+    def generate_response(self, messages, model=None, temperature=0.7, max_tokens=2048):
+        """Generate a response using OpenAI's chat completion API"""
+        if model is None:
+            model = self.default_model
         
         try:
             response = self.client.chat.completions.create(
                 model=model,
-                messages=[
-                    {"role": "user", "content": message}
-                ],
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens
             )
             
-            return {
-                'content': response.choices[0].message.content,
-                'model': model,
-                'usage': response.usage.dict() if response.usage else None
-            }
+            return response.choices[0].message.content
+            
         except Exception as e:
-            logging.error(f"OpenAI chat completion error: {str(e)}")
-            raise
+            logging.error(f"OpenAI API error: {str(e)}")
+            raise e
     
-    def generate_image(self, prompt, model='dall-e-3', size='1024x1024'):
-        """Generate image using DALL-E"""
-        if not self.client:
-            raise Exception("OpenAI client not initialized - API key missing")
-        
+    def generate_image(self, prompt, size="1024x1024", quality="standard"):
+        """Generate an image using DALL-E"""
         try:
             response = self.client.images.generate(
-                model=model,
+                model="dall-e-3",
                 prompt=prompt,
+                n=1,
                 size=size,
-                quality="standard",
-                n=1
+                quality=quality
             )
             
-            return {
-                'url': response.data[0].url,
-                'revised_prompt': response.data[0].revised_prompt
-            }
+            return response.data[0].url
+            
         except Exception as e:
-            logging.error(f"OpenAI image generation error: {str(e)}")
-            raise
+            logging.error(f"DALL-E API error: {str(e)}")
+            raise e
     
-    def create_embedding(self, text, model='text-embedding-3-small'):
-        """Create embedding for text"""
-        if not self.client:
-            raise Exception("OpenAI client not initialized - API key missing")
-        
+    def transcribe_audio(self, audio_file_path):
+        """Transcribe audio using Whisper"""
+        try:
+            with open(audio_file_path, "rb") as audio_file:
+                response = self.client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            return response.text
+            
+        except Exception as e:
+            logging.error(f"Whisper API error: {str(e)}")
+            raise e
+    
+    def create_embedding(self, text, model="text-embedding-3-small"):
+        """Create embeddings for text"""
         try:
             response = self.client.embeddings.create(
                 model=model,
                 input=text
             )
             
-            return {
-                'embedding': response.data[0].embedding,
-                'model': model,
-                'usage': response.usage.dict() if response.usage else None
-            }
-        except Exception as e:
-            logging.error(f"OpenAI embedding error: {str(e)}")
-            raise
-    
-    def transcribe_audio(self, audio_file_path, model='whisper-1'):
-        """Transcribe audio file"""
-        if not self.client:
-            raise Exception("OpenAI client not initialized - API key missing")
-        
-        try:
-            with open(audio_file_path, 'rb') as audio_file:
-                response = self.client.audio.transcriptions.create(
-                    model=model,
-                    file=audio_file
-                )
+            return response.data[0].embedding
             
-            return {
-                'text': response.text,
-                'model': model
-            }
         except Exception as e:
-            logging.error(f"OpenAI transcription error: {str(e)}")
-            raise
+            logging.error(f"Embedding API error: {str(e)}")
+            raise e
     
-    def create_fine_tuning_job(self, training_file_id, model='gpt-3.5-turbo'):
-        """Create fine-tuning job"""
-        if not self.client:
-            raise Exception("OpenAI client not initialized - API key missing")
-        
+    def fine_tune_model(self, training_file_id, model="gpt-3.5-turbo"):
+        """Create a fine-tuning job"""
         try:
             response = self.client.fine_tuning.jobs.create(
                 training_file=training_file_id,
                 model=model
             )
             
-            return {
-                'job_id': response.id,
-                'status': response.status,
-                'model': model
-            }
+            return response.id
+            
         except Exception as e:
-            logging.error(f"OpenAI fine-tuning error: {str(e)}")
-            raise
+            logging.error(f"Fine-tuning API error: {str(e)}")
+            raise e
+    
+    def get_available_models(self):
+        """Get list of available models"""
+        try:
+            models = self.client.models.list()
+            return [model.id for model in models.data]
+            
+        except Exception as e:
+            logging.error(f"Models API error: {str(e)}")
+            raise e

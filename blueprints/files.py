@@ -1,295 +1,316 @@
-from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, send_from_directory
+from flask import Blueprint, render_template, request, jsonify, current_app, send_file
+from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-import os
+from models import File, KnowledgeBase, FileEmbedding, db
+from services.file_service import FileService
+from services.vector_service import VectorService
 import uuid
+import os
 import mimetypes
-from app import db
-from models import File, KnowledgeBase, KnowledgeBaseFile, FileEmbedding, User
-from blueprints.auth import login_required, get_current_user
-from utils.file_processor import FileProcessor
-from utils.vector_store import VectorStore
-from services.embedding_service import EmbeddingService
-import logging
 
-files_bp = Blueprint('files', __name__)
-
-ALLOWED_EXTENSIONS = {
-    'txt', 'pdf', 'doc', 'docx', 'xlsx', 'pptx', 'csv', 'json', 'xml',
-    'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
-    'mp3', 'wav', 'ogg', 'm4a',
-    'mp4', 'avi', 'mov', 'webm'
-}
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+files_bp = Blueprint('files', __name__, url_prefix='/files')
 
 @files_bp.route('/')
 @login_required
-def files_index():
-    user = get_current_user()
-    files = File.query.filter_by(user_id=user.id).order_by(File.upload_timestamp.desc()).all()
-    knowledge_bases = KnowledgeBase.query.filter_by(user_id=user.id).order_by(KnowledgeBase.created_at.desc()).all()
+def index():
+    # Get user's files
+    files = File.query.filter_by(
+        user_id=current_user.id
+    ).order_by(File.created_at.desc()).all()
     
-    return render_template('files/files.html', files=files, knowledge_bases=knowledge_bases)
+    # Get user's knowledge bases
+    knowledge_bases = KnowledgeBase.query.filter_by(
+        user_id=current_user.id
+    ).order_by(KnowledgeBase.updated_at.desc()).all()
+    
+    return render_template('files/index.html', 
+                         files=files, 
+                         knowledge_bases=knowledge_bases)
 
 @files_bp.route('/upload', methods=['POST'])
 @login_required
 def upload_file():
-    user = get_current_user()
-    
     if 'file' not in request.files:
-        return jsonify({'error': 'No file selected'}), 400
+        return jsonify({'error': 'No file uploaded'}), 400
     
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
     
-    if file and allowed_file(file.filename):
-        # Generate unique filename
-        original_filename = secure_filename(file.filename)
-        file_extension = original_filename.rsplit('.', 1)[1].lower()
-        unique_filename = f"{uuid.uuid4().hex}.{file_extension}"
-        
-        # Create user directory if it doesn't exist
-        user_dir = os.path.join(app.config['UPLOAD_FOLDER'], str(user.id))
-        os.makedirs(user_dir, exist_ok=True)
-        
-        file_path = os.path.join(user_dir, unique_filename)
-        
+    if file:
         try:
-            file.save(file_path)
+            file_service = FileService()
+            
+            # Secure the filename
+            filename = secure_filename(file.filename)
+            file_id = str(uuid.uuid4())
+            
+            # Save file
+            file_path = file_service.save_file(file, file_id, filename)
             
             # Get file info
             file_size = os.path.getsize(file_path)
-            mime_type = mimetypes.guess_type(file_path)[0]
+            mime_type = mimetypes.guess_type(filename)[0]
             
-            # Save file record
-            file_record = File(
-                user_id=user.id,
-                filename=unique_filename,
-                original_filename=original_filename,
-                file_path=file_path,
+            # Create database record
+            db_file = File(
+                id=file_id,
+                user_id=current_user.id,
+                filename=f"{file_id}_{filename}",
+                original_filename=filename,
+                file_type=file_service.get_file_type(filename),
                 file_size=file_size,
-                mime_type=mime_type
+                mime_type=mime_type,
+                storage_path=file_path,
+                processing_status='uploaded'
             )
             
-            db.session.add(file_record)
+            db.session.add(db_file)
             db.session.commit()
             
-            # Process file for text extraction and embedding (async in real app)
-            try:
-                processor = FileProcessor()
-                text_content = processor.extract_text(file_path, mime_type)
-                
-                if text_content:
-                    # Generate embeddings
-                    embedding_service = EmbeddingService()
-                    chunks = processor.chunk_text(text_content)
-                    
-                    for i, chunk in enumerate(chunks):
-                        embedding = embedding_service.generate_embedding(chunk)
-                        
-                        file_embedding = FileEmbedding(
-                            file_id=file_record.id,
-                            chunk_index=i,
-                            chunk_text=chunk,
-                            embedding=json.dumps(embedding)
-                        )
-                        db.session.add(file_embedding)
-                    
-                    file_record.is_processed = True
-                    db.session.commit()
-                    
-                    logging.info(f"File processed and embedded: {file_record.id}")
-            
-            except Exception as e:
-                logging.error(f"Error processing file {file_record.id}: {str(e)}")
+            # Start background processing
+            file_service.process_file_async(file_id)
             
             return jsonify({
                 'success': True,
-                'file_id': file_record.id,
-                'filename': original_filename,
+                'file_id': file_id,
+                'filename': filename,
                 'file_size': file_size,
-                'mime_type': mime_type,
-                'upload_timestamp': file_record.upload_timestamp.isoformat()
+                'mime_type': mime_type
             })
-        
+            
         except Exception as e:
-            logging.error(f"Error uploading file: {str(e)}")
-            return jsonify({'error': 'Failed to upload file'}), 500
-    
-    return jsonify({'error': 'Invalid file type'}), 400
+            return jsonify({'error': str(e)}), 500
 
-@files_bp.route('/download/<int:file_id>')
+@files_bp.route('/<file_id>/download')
 @login_required
 def download_file(file_id):
-    user = get_current_user()
-    file_record = File.query.filter_by(id=file_id, user_id=user.id).first_or_404()
+    file = File.query.filter_by(
+        id=file_id,
+        user_id=current_user.id
+    ).first_or_404()
     
-    directory = os.path.dirname(file_record.file_path)
-    filename = os.path.basename(file_record.file_path)
-    
-    return send_from_directory(directory, filename, as_attachment=True, 
-                             download_name=file_record.original_filename)
+    return send_file(
+        file.storage_path,
+        as_attachment=True,
+        download_name=file.original_filename
+    )
 
-@files_bp.route('/delete/<int:file_id>', methods=['POST'])
+@files_bp.route('/<file_id>/preview')
+@login_required
+def preview_file(file_id):
+    file = File.query.filter_by(
+        id=file_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    file_service = FileService()
+    preview_data = file_service.get_file_preview(file)
+    
+    return jsonify({
+        'success': True,
+        'preview': preview_data
+    })
+
+@files_bp.route('/<file_id>/delete', methods=['POST'])
 @login_required
 def delete_file(file_id):
-    user = get_current_user()
-    file_record = File.query.filter_by(id=file_id, user_id=user.id).first()
+    file = File.query.filter_by(
+        id=file_id,
+        user_id=current_user.id
+    ).first_or_404()
     
-    if file_record:
-        try:
-            # Delete physical file
-            if os.path.exists(file_record.file_path):
-                os.remove(file_record.file_path)
-            
-            # Delete database record (cascades to embeddings)
-            db.session.delete(file_record)
-            db.session.commit()
-            
-            logging.info(f"File deleted: {file_id}")
-            return jsonify({'success': True})
+    try:
+        # Delete physical file
+        if os.path.exists(file.storage_path):
+            os.remove(file.storage_path)
         
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Error deleting file: {str(e)}")
-            return jsonify({'error': 'Failed to delete file'}), 500
-    
-    return jsonify({'error': 'File not found'}), 404
+        # Delete from database (cascades to embeddings)
+        db.session.delete(file)
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @files_bp.route('/knowledge-base')
 @login_required
 def knowledge_base():
-    user = get_current_user()
-    knowledge_bases = KnowledgeBase.query.filter_by(user_id=user.id).order_by(KnowledgeBase.created_at.desc()).all()
-    files = File.query.filter_by(user_id=user.id).order_by(File.upload_timestamp.desc()).all()
+    knowledge_bases = KnowledgeBase.query.filter_by(
+        user_id=current_user.id
+    ).order_by(KnowledgeBase.updated_at.desc()).all()
     
-    return render_template('files/knowledge_base.html', knowledge_bases=knowledge_bases, files=files)
+    return render_template('files/knowledge_base.html', 
+                         knowledge_bases=knowledge_bases)
 
 @files_bp.route('/knowledge-base/create', methods=['POST'])
 @login_required
 def create_knowledge_base():
-    user = get_current_user()
-    name = request.form.get('name')
-    description = request.form.get('description', '')
+    data = request.get_json()
+    
+    name = data.get('name', '').strip()
+    description = data.get('description', '').strip()
     
     if not name:
         return jsonify({'error': 'Knowledge base name is required'}), 400
     
+    kb_id = str(uuid.uuid4())
     knowledge_base = KnowledgeBase(
-        user_id=user.id,
+        id=kb_id,
+        user_id=current_user.id,
         name=name,
-        description=description
+        description=description,
+        settings=data.get('settings', {})
     )
     
-    try:
-        db.session.add(knowledge_base)
-        db.session.commit()
-        
-        logging.info(f"Knowledge base created: {knowledge_base.id}")
-        return jsonify({
-            'success': True,
-            'id': knowledge_base.id,
-            'name': knowledge_base.name,
-            'description': knowledge_base.description,
-            'created_at': knowledge_base.created_at.isoformat()
-        })
+    db.session.add(knowledge_base)
+    db.session.commit()
     
-    except Exception as e:
-        db.session.rollback()
-        logging.error(f"Error creating knowledge base: {str(e)}")
-        return jsonify({'error': 'Failed to create knowledge base'}), 500
+    return jsonify({
+        'success': True,
+        'knowledge_base_id': kb_id
+    })
 
-@files_bp.route('/knowledge-base/<int:kb_id>/add-file', methods=['POST'])
+@files_bp.route('/knowledge-base/<kb_id>')
+@login_required
+def view_knowledge_base(kb_id):
+    kb = KnowledgeBase.query.filter_by(
+        id=kb_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    # Get files in this knowledge base
+    embeddings = FileEmbedding.query.filter_by(
+        knowledge_base_id=kb_id
+    ).join(File).filter_by(user_id=current_user.id).all()
+    
+    files = {}
+    for embedding in embeddings:
+        if embedding.file_id not in files:
+            files[embedding.file_id] = embedding.file
+    
+    return render_template('files/knowledge_base_view.html', 
+                         knowledge_base=kb, 
+                         files=list(files.values()))
+
+@files_bp.route('/knowledge-base/<kb_id>/add-file', methods=['POST'])
 @login_required
 def add_file_to_knowledge_base(kb_id):
-    user = get_current_user()
+    kb = KnowledgeBase.query.filter_by(
+        id=kb_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
     data = request.get_json()
     file_id = data.get('file_id')
     
-    if not file_id:
-        return jsonify({'error': 'File ID is required'}), 400
-    
-    knowledge_base = KnowledgeBase.query.filter_by(id=kb_id, user_id=user.id).first()
-    file_record = File.query.filter_by(id=file_id, user_id=user.id).first()
-    
-    if not knowledge_base or not file_record:
-        return jsonify({'error': 'Knowledge base or file not found'}), 404
-    
-    # Check if already associated
-    existing = KnowledgeBaseFile.query.filter_by(
-        knowledge_base_id=kb_id, 
-        file_id=file_id
-    ).first()
-    
-    if existing:
-        return jsonify({'error': 'File already in knowledge base'}), 400
+    file = File.query.filter_by(
+        id=file_id,
+        user_id=current_user.id
+    ).first_or_404()
     
     try:
-        association = KnowledgeBaseFile(
-            knowledge_base_id=kb_id,
-            file_id=file_id
-        )
+        vector_service = VectorService()
+        vector_service.add_file_to_knowledge_base(file, kb)
         
-        db.session.add(association)
-        knowledge_base.updated_at = datetime.utcnow()
-        db.session.commit()
-        
-        logging.info(f"File {file_id} added to knowledge base {kb_id}")
         return jsonify({'success': True})
-    
     except Exception as e:
-        db.session.rollback()
-        logging.error(f"Error adding file to knowledge base: {str(e)}")
-        return jsonify({'error': 'Failed to add file to knowledge base'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@files_bp.route('/knowledge-base/<int:kb_id>/search', methods=['POST'])
+@files_bp.route('/knowledge-base/<kb_id>/search', methods=['POST'])
 @login_required
 def search_knowledge_base(kb_id):
-    user = get_current_user()
+    kb = KnowledgeBase.query.filter_by(
+        id=kb_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
     data = request.get_json()
-    query = data.get('query')
+    query = data.get('query', '').strip()
     
     if not query:
         return jsonify({'error': 'Search query is required'}), 400
     
-    knowledge_base = KnowledgeBase.query.filter_by(id=kb_id, user_id=user.id).first()
-    if not knowledge_base:
-        return jsonify({'error': 'Knowledge base not found'}), 404
-    
     try:
-        vector_store = VectorStore()
-        results = vector_store.semantic_search(kb_id, query, limit=10)
+        vector_service = VectorService()
+        results = vector_service.search_knowledge_base(kb, query)
         
         return jsonify({
             'success': True,
-            'results': results,
-            'query': query
+            'results': results
         })
-    
     except Exception as e:
-        logging.error(f"Error searching knowledge base: {str(e)}")
-        return jsonify({'error': 'Search failed'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@files_bp.route('/knowledge-base/<int:kb_id>/delete', methods=['POST'])
+@files_bp.route('/batch-upload', methods=['POST'])
 @login_required
-def delete_knowledge_base(kb_id):
-    user = get_current_user()
-    knowledge_base = KnowledgeBase.query.filter_by(id=kb_id, user_id=user.id).first()
+def batch_upload():
+    files = request.files.getlist('files')
     
-    if knowledge_base:
-        try:
-            db.session.delete(knowledge_base)
-            db.session.commit()
-            
-            logging.info(f"Knowledge base deleted: {kb_id}")
-            return jsonify({'success': True})
-        
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Error deleting knowledge base: {str(e)}")
-            return jsonify({'error': 'Failed to delete knowledge base'}), 500
+    if not files:
+        return jsonify({'error': 'No files uploaded'}), 400
     
-    return jsonify({'error': 'Knowledge base not found'}), 404
+    results = []
+    file_service = FileService()
+    
+    for file in files:
+        if file.filename:
+            try:
+                filename = secure_filename(file.filename)
+                file_id = str(uuid.uuid4())
+                
+                file_path = file_service.save_file(file, file_id, filename)
+                file_size = os.path.getsize(file_path)
+                mime_type = mimetypes.guess_type(filename)[0]
+                
+                db_file = File(
+                    id=file_id,
+                    user_id=current_user.id,
+                    filename=f"{file_id}_{filename}",
+                    original_filename=filename,
+                    file_type=file_service.get_file_type(filename),
+                    file_size=file_size,
+                    mime_type=mime_type,
+                    storage_path=file_path,
+                    processing_status='uploaded'
+                )
+                
+                db.session.add(db_file)
+                
+                results.append({
+                    'file_id': file_id,
+                    'filename': filename,
+                    'status': 'success'
+                })
+                
+                # Start background processing
+                file_service.process_file_async(file_id)
+                
+            except Exception as e:
+                results.append({
+                    'filename': file.filename,
+                    'status': 'error',
+                    'error': str(e)
+                })
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'results': results
+    })
+
+@files_bp.route('/process-status/<file_id>')
+@login_required
+def file_process_status(file_id):
+    file = File.query.filter_by(
+        id=file_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    return jsonify({
+        'file_id': file_id,
+        'status': file.processing_status,
+        'is_processed': file.is_processed,
+        'metadata': file.metadata
+    })

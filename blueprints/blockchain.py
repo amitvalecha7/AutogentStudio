@@ -1,392 +1,379 @@
-from flask import Blueprint, render_template, request, jsonify, session
-from app import db
-from models import User
-from blueprints.auth import login_required, get_current_user
-import logging
-import json
-from datetime import datetime
+from flask import Blueprint, render_template, request, jsonify
+from flask_login import login_required, current_user
+from models import BlockchainWallet, SmartContract, db
+from services.blockchain_service import BlockchainService
+import uuid
 
-blockchain_bp = Blueprint('blockchain', __name__)
+blockchain_bp = Blueprint('blockchain', __name__, url_prefix='/blockchain')
 
 @blockchain_bp.route('/')
 @login_required
-def blockchain_index():
-    user = get_current_user()
+def index():
+    # Get user's wallets and contracts
+    wallets = BlockchainWallet.query.filter_by(
+        user_id=current_user.id
+    ).order_by(BlockchainWallet.created_at.desc()).all()
     
-    # Simulate blockchain dashboard data
-    blockchain_data = {
-        'wallet_connected': True,
-        'wallet_address': '0x742d35Cc6cF8Aa8A6b1D8B5E5f9d0a1C2B3E4F5A',
-        'balance': {
-            'eth': 2.45,
-            'usdc': 1250.00,
-            'autogent_tokens': 15000
-        },
-        'transactions': {
-            'total': 156,
-            'this_month': 23,
-            'pending': 2
-        },
-        'smart_contracts': {
-            'deployed': 3,
-            'active': 2
-        }
-    }
+    contracts = SmartContract.query.all()  # Public contracts
     
-    return render_template('blockchain/blockchain.html', 
-                         user=user,
-                         blockchain_data=blockchain_data)
+    return render_template('blockchain/index.html', 
+                         wallets=wallets, 
+                         contracts=contracts)
 
 @blockchain_bp.route('/wallet')
 @login_required
-def wallet_management():
-    user = get_current_user()
+def wallet():
+    wallets = BlockchainWallet.query.filter_by(
+        user_id=current_user.id
+    ).order_by(BlockchainWallet.created_at.desc()).all()
     
-    # Simulate wallet data
-    wallet_data = {
-        'address': '0x742d35Cc6cF8Aa8A6b1D8B5E5f9d0a1C2B3E4F5A',
-        'network': 'Ethereum Mainnet',
-        'balance': {
-            'ETH': {'amount': 2.45, 'usd_value': 4900.00},
-            'USDC': {'amount': 1250.00, 'usd_value': 1250.00},
-            'AUTOGENT': {'amount': 15000, 'usd_value': 750.00}
-        },
-        'recent_transactions': [
-            {
-                'hash': '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
-                'type': 'receive',
-                'amount': 100,
-                'token': 'AUTOGENT',
-                'from': '0x123...abc',
-                'timestamp': datetime.utcnow().isoformat(),
-                'status': 'confirmed'
-            },
-            {
-                'hash': '0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c',
-                'type': 'send',
-                'amount': 0.1,
-                'token': 'ETH',
-                'to': '0x456...def',
-                'timestamp': datetime.utcnow().isoformat(),
-                'status': 'confirmed'
-            }
-        ]
-    }
-    
-    return render_template('blockchain/wallet.html', 
-                         user=user,
-                         wallet_data=wallet_data)
+    return render_template('blockchain/wallet.html', wallets=wallets)
 
 @blockchain_bp.route('/contracts')
 @login_required
-def smart_contracts():
-    user = get_current_user()
+def contracts():
+    contracts = SmartContract.query.order_by(
+        SmartContract.created_at.desc()
+    ).all()
     
-    # Simulate smart contract data
-    contracts = [
-        {
-            'id': 1,
-            'name': 'Plugin Revenue Sharing',
-            'address': '0xabc123def456789012345678901234567890abcd',
-            'status': 'active',
-            'participants': 15,
-            'total_revenue': 2400.50,
-            'user_share': 240.05,
-            'deployed_at': datetime.utcnow().isoformat()
-        },
-        {
-            'id': 2,
-            'name': 'AI Agent Marketplace',
-            'address': '0xdef456abc789012345678901234567890abcdef',
-            'status': 'active',
-            'listings': 8,
-            'total_sales': 1800.00,
-            'commission_earned': 90.00,
-            'deployed_at': datetime.utcnow().isoformat()
-        }
-    ]
-    
-    return render_template('blockchain/contracts.html', 
-                         user=user,
-                         contracts=contracts)
+    return render_template('blockchain/contracts.html', contracts=contracts)
 
 @blockchain_bp.route('/plugins')
 @login_required
-def decentralized_plugins():
-    user = get_current_user()
-    
-    # Simulate decentralized plugin marketplace
-    plugins = [
-        {
-            'id': 1,
-            'name': 'Quantum Circuit Optimizer',
-            'author': '0x123...abc',
-            'price': 0.05,  # ETH
-            'token': 'ETH',
-            'downloads': 145,
-            'rating': 4.8,
-            'revenue_share': 10,  # percentage
-            'verified': True,
-            'ipfs_hash': 'QmX1Y2Z3A4B5C6D7E8F9G0H1I2J3K4L5M6N7O8P9Q0R1S2T'
-        },
-        {
-            'id': 2,
-            'name': 'Federated Learning Coordinator',
-            'author': '0x456...def',
-            'price': 100,  # AUTOGENT tokens
-            'token': 'AUTOGENT',
-            'downloads': 89,
-            'rating': 4.6,
-            'revenue_share': 15,
-            'verified': True,
-            'ipfs_hash': 'QmA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0U1V2W'
-        }
-    ]
-    
-    return render_template('blockchain/plugins.html', 
-                         user=user,
-                         plugins=plugins)
+def plugins():
+    return render_template('blockchain/plugins.html')
 
 @blockchain_bp.route('/revenue')
 @login_required
-def revenue_sharing():
-    user = get_current_user()
-    
-    # Simulate revenue sharing data
-    revenue_data = {
-        'total_earned': 1450.75,
-        'this_month': 125.50,
-        'pending_payout': 45.25,
-        'next_payout': '2024-02-01',
-        'revenue_streams': [
-            {
-                'source': 'Plugin Sales',
-                'amount': 850.00,
-                'percentage': 58.6
-            },
-            {
-                'source': 'AI Agent Commissions',
-                'amount': 400.75,
-                'percentage': 27.6
-            },
-            {
-                'source': 'Data Marketplace',
-                'amount': 200.00,
-                'percentage': 13.8
-            }
-        ],
-        'payout_history': [
-            {
-                'date': '2024-01-01',
-                'amount': 234.50,
-                'tx_hash': '0x1a2b3c...',
-                'status': 'completed'
-            },
-            {
-                'date': '2023-12-01',
-                'amount': 189.25,
-                'tx_hash': '0x2b3c4d...',
-                'status': 'completed'
-            }
-        ]
-    }
-    
-    return render_template('blockchain/revenue.html', 
-                         user=user,
-                         revenue_data=revenue_data)
+def revenue():
+    return render_template('blockchain/revenue.html')
 
 @blockchain_bp.route('/nft')
 @login_required
-def nft_agents():
-    user = get_current_user()
-    
-    # Simulate NFT-based AI agents
-    nft_agents = [
-        {
-            'id': 1,
-            'name': 'Quantum AI Assistant',
-            'token_id': 42,
-            'contract_address': '0x789...012',
-            'owner': user.username,
-            'capabilities': ['quantum_computing', 'optimization', 'simulation'],
-            'level': 3,
-            'experience': 1250,
-            'market_value': 0.25,  # ETH
-            'metadata_uri': 'ipfs://QmNFT1...',
-            'image_url': 'https://api.autogent.studio/nft/42/image'
-        },
-        {
-            'id': 2,
-            'name': 'Neuromorphic Edge AI',
-            'token_id': 73,
-            'contract_address': '0x789...012',
-            'owner': user.username,
-            'capabilities': ['edge_computing', 'spike_processing', 'low_power'],
-            'level': 2,
-            'experience': 800,
-            'market_value': 0.18,
-            'metadata_uri': 'ipfs://QmNFT2...',
-            'image_url': 'https://api.autogent.studio/nft/73/image'
-        }
-    ]
-    
-    return render_template('blockchain/nft.html', 
-                         user=user,
-                         nft_agents=nft_agents)
+def nft():
+    return render_template('blockchain/nft.html')
 
 @blockchain_bp.route('/connect-wallet', methods=['POST'])
 @login_required
 def connect_wallet():
-    user = get_current_user()
     data = request.get_json()
     
-    wallet_address = data.get('wallet_address')
+    wallet_address = data.get('wallet_address', '').strip()
     wallet_type = data.get('wallet_type', 'metamask')
+    network = data.get('network', 'ethereum')
     
     if not wallet_address:
         return jsonify({'error': 'Wallet address is required'}), 400
     
     try:
-        # In a real implementation, verify wallet ownership
-        logging.info(f"Wallet {wallet_address} connected for user {user.id}")
+        blockchain_service = BlockchainService()
+        
+        # Verify wallet ownership
+        verification_result = blockchain_service.verify_wallet_ownership(
+            address=wallet_address,
+            wallet_type=wallet_type,
+            network=network
+        )
+        
+        if not verification_result.get('verified'):
+            return jsonify({'error': 'Wallet verification failed'}), 400
+        
+        # Check if wallet already exists
+        existing_wallet = BlockchainWallet.query.filter_by(
+            user_id=current_user.id,
+            wallet_address=wallet_address,
+            network=network
+        ).first()
+        
+        if existing_wallet:
+            existing_wallet.is_active = True
+            existing_wallet.wallet_type = wallet_type
+            db.session.commit()
+            wallet_id = existing_wallet.id
+        else:
+            wallet_id = str(uuid.uuid4())
+            wallet = BlockchainWallet(
+                id=wallet_id,
+                user_id=current_user.id,
+                wallet_address=wallet_address,
+                wallet_type=wallet_type,
+                network=network,
+                is_active=True
+            )
+            
+            db.session.add(wallet)
+            db.session.commit()
+        
         return jsonify({
             'success': True,
-            'wallet_address': wallet_address,
-            'wallet_type': wallet_type,
-            'message': 'Wallet connected successfully'
+            'wallet_id': wallet_id,
+            'verification': verification_result
         })
-    
+        
     except Exception as e:
-        logging.error(f"Error connecting wallet: {str(e)}")
-        return jsonify({'error': 'Failed to connect wallet'}), 500
+        return jsonify({'error': str(e)}), 500
+
+@blockchain_bp.route('/wallet/<wallet_id>/balance')
+@login_required
+def wallet_balance(wallet_id):
+    wallet = BlockchainWallet.query.filter_by(
+        id=wallet_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    try:
+        blockchain_service = BlockchainService()
+        
+        # Get wallet balance
+        balance_info = blockchain_service.get_wallet_balance(wallet)
+        
+        return jsonify({
+            'success': True,
+            'balance': balance_info
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @blockchain_bp.route('/deploy-contract', methods=['POST'])
 @login_required
 def deploy_contract():
-    user = get_current_user()
     data = request.get_json()
     
-    contract_type = data.get('contract_type')
-    contract_params = data.get('contract_params', {})
+    contract_name = data.get('name', '').strip()
+    contract_code = data.get('contract_code', '')
+    network = data.get('network', 'ethereum')
+    wallet_id = data.get('wallet_id')
     
-    if not contract_type:
-        return jsonify({'error': 'Contract type is required'}), 400
+    if not all([contract_name, contract_code, wallet_id]):
+        return jsonify({'error': 'All fields are required'}), 400
+    
+    wallet = BlockchainWallet.query.filter_by(
+        id=wallet_id,
+        user_id=current_user.id
+    ).first_or_404()
     
     try:
-        # Simulate contract deployment
-        contract_address = f"0x{''.join(['a', 'b', 'c', 'd', 'e', 'f'] * 7)}"
+        blockchain_service = BlockchainService()
         
-        logging.info(f"Smart contract deployed for user {user.id}")
+        # Deploy smart contract
+        deployment_result = blockchain_service.deploy_smart_contract(
+            contract_code=contract_code,
+            wallet=wallet,
+            network=network
+        )
+        
+        contract_id = str(uuid.uuid4())
+        contract = SmartContract(
+            id=contract_id,
+            name=contract_name,
+            contract_address=deployment_result.get('address'),
+            network=network,
+            abi=deployment_result.get('abi', []),
+            purpose=data.get('purpose', ''),
+            is_verified=False
+        )
+        
+        db.session.add(contract)
+        db.session.commit()
+        
         return jsonify({
             'success': True,
-            'contract_address': contract_address,
-            'transaction_hash': f"0x{'1' * 64}",
-            'gas_used': 2100000,
-            'message': 'Smart contract deployed successfully'
+            'contract_id': contract_id,
+            'deployment': deployment_result
         })
-    
+        
     except Exception as e:
-        logging.error(f"Error deploying contract: {str(e)}")
-        return jsonify({'error': 'Failed to deploy contract'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@blockchain_bp.route('/publish-plugin', methods=['POST'])
+@blockchain_bp.route('/contract/<contract_id>')
 @login_required
-def publish_plugin():
-    user = get_current_user()
+def view_contract(contract_id):
+    contract = SmartContract.query.get_or_404(contract_id)
+    
+    return render_template('blockchain/contract_detail.html', contract=contract)
+
+@blockchain_bp.route('/contract/<contract_id>/interact', methods=['POST'])
+@login_required
+def interact_contract(contract_id):
+    contract = SmartContract.query.get_or_404(contract_id)
+    
+    data = request.get_json()
+    method_name = data.get('method_name')
+    parameters = data.get('parameters', [])
+    wallet_id = data.get('wallet_id')
+    
+    if not all([method_name, wallet_id]):
+        return jsonify({'error': 'Method name and wallet ID are required'}), 400
+    
+    wallet = BlockchainWallet.query.filter_by(
+        id=wallet_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    try:
+        blockchain_service = BlockchainService()
+        
+        # Interact with smart contract
+        interaction_result = blockchain_service.interact_with_contract(
+            contract=contract,
+            method_name=method_name,
+            parameters=parameters,
+            wallet=wallet
+        )
+        
+        return jsonify({
+            'success': True,
+            'result': interaction_result
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@blockchain_bp.route('/revenue-sharing/setup', methods=['POST'])
+@login_required
+def setup_revenue_sharing():
     data = request.get_json()
     
-    plugin_name = data.get('plugin_name')
-    plugin_code = data.get('plugin_code')
-    price = data.get('price', 0)
-    token = data.get('token', 'ETH')
+    plugin_id = data.get('plugin_id')
+    revenue_percentage = data.get('revenue_percentage', 70.0)
+    wallet_id = data.get('wallet_id')
     
-    if not plugin_name or not plugin_code:
-        return jsonify({'error': 'Plugin name and code are required'}), 400
+    if not all([plugin_id, wallet_id]):
+        return jsonify({'error': 'Plugin ID and wallet ID are required'}), 400
+    
+    wallet = BlockchainWallet.query.filter_by(
+        id=wallet_id,
+        user_id=current_user.id
+    ).first_or_404()
     
     try:
-        # Simulate plugin publishing to IPFS and blockchain
-        ipfs_hash = f"Qm{''.join(['A', 'B', 'C', 'D', 'E', 'F'] * 8)}"
+        blockchain_service = BlockchainService()
         
-        logging.info(f"Plugin published to blockchain for user {user.id}")
+        # Set up revenue sharing contract
+        revenue_setup = blockchain_service.setup_revenue_sharing(
+            plugin_id=plugin_id,
+            revenue_percentage=revenue_percentage,
+            wallet=wallet
+        )
+        
         return jsonify({
             'success': True,
-            'ipfs_hash': ipfs_hash,
-            'contract_address': '0xplugin...',
-            'listing_id': 123,
-            'message': 'Plugin published successfully'
+            'setup': revenue_setup
         })
-    
+        
     except Exception as e:
-        logging.error(f"Error publishing plugin: {str(e)}")
-        return jsonify({'error': 'Failed to publish plugin'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@blockchain_bp.route('/mint-nft-agent', methods=['POST'])
+@blockchain_bp.route('/nft/mint', methods=['POST'])
 @login_required
-def mint_nft_agent():
-    user = get_current_user()
+def mint_nft():
     data = request.get_json()
     
-    agent_name = data.get('agent_name')
-    capabilities = data.get('capabilities', [])
-    metadata = data.get('metadata', {})
+    ai_agent_id = data.get('ai_agent_id')
+    metadata_uri = data.get('metadata_uri')
+    wallet_id = data.get('wallet_id')
     
-    if not agent_name:
-        return jsonify({'error': 'Agent name is required'}), 400
+    if not all([ai_agent_id, metadata_uri, wallet_id]):
+        return jsonify({'error': 'All fields are required'}), 400
+    
+    wallet = BlockchainWallet.query.filter_by(
+        id=wallet_id,
+        user_id=current_user.id
+    ).first_or_404()
     
     try:
-        # Simulate NFT minting
-        token_id = 12345
+        blockchain_service = BlockchainService()
         
-        logging.info(f"NFT agent minted for user {user.id}")
+        # Mint NFT for AI agent
+        mint_result = blockchain_service.mint_ai_agent_nft(
+            ai_agent_id=ai_agent_id,
+            metadata_uri=metadata_uri,
+            wallet=wallet
+        )
+        
         return jsonify({
             'success': True,
-            'token_id': token_id,
-            'contract_address': '0xnftagent...',
-            'transaction_hash': f"0x{'2' * 64}",
-            'metadata_uri': f"ipfs://QmAgent{token_id}",
-            'message': 'NFT agent minted successfully'
+            'mint_result': mint_result
         })
-    
+        
     except Exception as e:
-        logging.error(f"Error minting NFT agent: {str(e)}")
-        return jsonify({'error': 'Failed to mint NFT agent'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@blockchain_bp.route('/quantum-resistant-setup', methods=['POST'])
+@blockchain_bp.route('/transaction-history/<wallet_id>')
 @login_required
-def setup_quantum_resistant():
-    user = get_current_user()
+def transaction_history(wallet_id):
+    wallet = BlockchainWallet.query.filter_by(
+        id=wallet_id,
+        user_id=current_user.id
+    ).first_or_404()
     
     try:
-        # Simulate quantum-resistant blockchain setup
-        logging.info(f"Quantum-resistant blockchain setup for user {user.id}")
+        blockchain_service = BlockchainService()
+        
+        # Get transaction history
+        transactions = blockchain_service.get_transaction_history(wallet)
+        
         return jsonify({
             'success': True,
-            'message': 'Quantum-resistant blockchain configured',
-            'signature_scheme': 'CRYSTALS-Dilithium',
-            'key_exchange': 'CRYSTALS-Kyber',
-            'hash_function': 'SHA-3'
+            'transactions': transactions
         })
-    
+        
     except Exception as e:
-        logging.error(f"Error setting up quantum-resistant blockchain: {str(e)}")
-        return jsonify({'error': 'Failed to setup quantum-resistant blockchain'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@blockchain_bp.route('/neuromorphic-blockchain', methods=['POST'])
+@blockchain_bp.route('/networks')
 @login_required
-def setup_neuromorphic_blockchain():
-    user = get_current_user()
+def supported_networks():
+    networks = {
+        'ethereum': {
+            'name': 'Ethereum',
+            'currency': 'ETH',
+            'chain_id': 1,
+            'rpc_url': 'https://mainnet.infura.io/v3/',
+            'explorer': 'https://etherscan.io'
+        },
+        'polygon': {
+            'name': 'Polygon',
+            'currency': 'MATIC',
+            'chain_id': 137,
+            'rpc_url': 'https://polygon-rpc.com/',
+            'explorer': 'https://polygonscan.com'
+        },
+        'bsc': {
+            'name': 'Binance Smart Chain',
+            'currency': 'BNB',
+            'chain_id': 56,
+            'rpc_url': 'https://bsc-dataseed.binance.org/',
+            'explorer': 'https://bscscan.com'
+        },
+        'arbitrum': {
+            'name': 'Arbitrum',
+            'currency': 'ETH',
+            'chain_id': 42161,
+            'rpc_url': 'https://arb1.arbitrum.io/rpc',
+            'explorer': 'https://arbiscan.io'
+        }
+    }
     
+    return jsonify({
+        'success': True,
+        'networks': networks
+    })
+
+@blockchain_bp.route('/gas-price/<network>')
+@login_required
+def gas_price(network):
     try:
-        # Simulate neuromorphic blockchain for edge transactions
-        logging.info(f"Neuromorphic blockchain setup for user {user.id}")
+        blockchain_service = BlockchainService()
+        
+        # Get current gas price
+        gas_info = blockchain_service.get_gas_price(network)
+        
         return jsonify({
             'success': True,
-            'message': 'Neuromorphic blockchain configured',
-            'edge_nodes': 5,
-            'power_efficiency': '99.5%',
-            'transaction_latency': '< 1ms'
+            'gas_info': gas_info
         })
-    
+        
     except Exception as e:
-        logging.error(f"Error setting up neuromorphic blockchain: {str(e)}")
-        return jsonify({'error': 'Failed to setup neuromorphic blockchain'}), 500
+        return jsonify({'error': str(e)}), 500

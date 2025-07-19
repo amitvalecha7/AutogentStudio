@@ -1,240 +1,355 @@
 import os
-import openai
-import anthropic
-from anthropic import Anthropic
-import requests
+import logging
+from typing import Dict, List, Any, Optional
 import json
-from utils.encryption import decrypt_api_key
-from models import APIKey
-from flask_login import current_user
 
-class AIProviders:
-    def __init__(self):
-        self.providers = {
-            'openai': self._get_openai_client,
-            'anthropic': self._get_anthropic_client,
-            'google': self._get_google_client,
-            'cohere': self._get_cohere_client,
-            'ollama': self._get_ollama_client
-        }
-    
-    def _get_api_key(self, provider):
-        """Get decrypted API key for provider"""
-        if current_user.is_authenticated:
-            api_key_record = APIKey.query.filter_by(
-                user_id=current_user.id, 
-                provider=provider,
-                is_active=True
-            ).first()
-            
-            if api_key_record:
-                return decrypt_api_key(api_key_record.encrypted_key)
-        
-        # Fallback to environment variables
-        return os.getenv(f'{provider.upper()}_API_KEY')
-    
-    def _get_openai_client(self):
-        """Get OpenAI client"""
-        api_key = self._get_api_key('openai')
+# Import AI provider SDKs
+try:
+    import openai
+    from openai import OpenAI
+except ImportError:
+    openai = None
+
+try:
+    import anthropic
+    from anthropic import Anthropic
+except ImportError:
+    anthropic = None
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
+def get_provider_client(provider: str):
+    """Get initialized client for AI provider"""
+    if provider == 'openai':
+        if not openai:
+            raise ImportError("OpenAI SDK not installed")
+        api_key = os.environ.get('OPENAI_API_KEY')
         if not api_key:
-            raise ValueError("OpenAI API key not found")
-        
-        return openai.OpenAI(api_key=api_key)
+            raise ValueError("OPENAI_API_KEY environment variable not set")
+        return OpenAI(api_key=api_key)
     
-    def _get_anthropic_client(self):
-        """Get Anthropic client"""
-        api_key = self._get_api_key('anthropic')
+    elif provider == 'anthropic':
+        if not anthropic:
+            raise ImportError("Anthropic SDK not installed")
+        api_key = os.environ.get('ANTHROPIC_API_KEY')
         if not api_key:
-            raise ValueError("Anthropic API key not found")
-        
+            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
         return Anthropic(api_key=api_key)
     
-    def _get_google_client(self):
-        """Get Google AI client"""
-        api_key = self._get_api_key('google')
+    elif provider == 'google':
+        if not genai:
+            raise ImportError("Google Generative AI SDK not installed")
+        api_key = os.environ.get('GOOGLE_API_KEY')
         if not api_key:
-            raise ValueError("Google AI API key not found")
+            raise ValueError("GOOGLE_API_KEY environment variable not set")
+        genai.configure(api_key=api_key)
+        return genai
+    
+    else:
+        raise ValueError(f"Unsupported provider: {provider}")
+
+def generate_response(provider: str, model: str, messages: List[Dict], 
+                     temperature: float = 0.7, max_tokens: int = 2048) -> str:
+    """Generate AI response using specified provider and model"""
+    try:
+        if provider == 'openai':
+            client = get_provider_client('openai')
+            
+            # The newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # Do not change this unless explicitly requested by the user
+            if model == 'gpt-4':
+                model = 'gpt-4o'  # Use latest model
+            
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            return response.choices[0].message.content
         
-        return {"api_key": api_key}
-    
-    def _get_cohere_client(self):
-        """Get Cohere client"""
-        api_key = self._get_api_key('cohere')
-        if not api_key:
-            raise ValueError("Cohere API key not found")
+        elif provider == 'anthropic':
+            client = get_provider_client('anthropic')
+            
+            # The newest Anthropic model is "claude-sonnet-4-20250514", not older 3.x models
+            # If the user doesn't specify a model, always prefer using "claude-sonnet-4-20250514"
+            if model in ['claude-3-5-sonnet', 'claude-3-sonnet']:
+                model = 'claude-sonnet-4-20250514'
+            
+            # Convert messages format for Anthropic
+            system_message = None
+            conversation_messages = []
+            
+            for msg in messages:
+                if msg['role'] == 'system':
+                    system_message = msg['content']
+                else:
+                    conversation_messages.append(msg)
+            
+            response = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_message,
+                messages=conversation_messages
+            )
+            return response.content[0].text
         
-        return {"api_key": api_key}
-    
-    def _get_ollama_client(self):
-        """Get Ollama client"""
-        base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
-        return {"base_url": base_url}
-    
-    def get_chat_response(self, message, model='gpt-4o', temperature=0.7, max_tokens=2000):
-        """Get chat response from AI provider"""
-        try:
-            if model.startswith('gpt-'):
-                # OpenAI models
-                client = self._get_openai_client()
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": message}],
+        elif provider == 'google':
+            genai_client = get_provider_client('google')
+            
+            # Convert messages to Google format
+            prompt_parts = []
+            for msg in messages:
+                if msg['role'] == 'system':
+                    prompt_parts.append(f"System: {msg['content']}")
+                elif msg['role'] == 'user':
+                    prompt_parts.append(f"Human: {msg['content']}")
+                elif msg['role'] == 'assistant':
+                    prompt_parts.append(f"Assistant: {msg['content']}")
+            
+            prompt = "\n".join(prompt_parts) + "\nAssistant:"
+            
+            model_instance = genai_client.GenerativeModel(model)
+            response = model_instance.generate_content(
+                prompt,
+                generation_config=genai_client.types.GenerationConfig(
                     temperature=temperature,
-                    max_tokens=max_tokens
+                    max_output_tokens=max_tokens
                 )
-                return response.choices[0].message.content
-            
-            elif model.startswith('claude-'):
-                # Anthropic models
-                client = self._get_anthropic_client()
-                response = client.messages.create(
-                    model=model,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    messages=[{"role": "user", "content": message}]
-                )
-                return response.content[0].text
-            
-            elif model.startswith('gemini-'):
-                # Google models
-                client = self._get_google_client()
-                headers = {
-                    'Content-Type': 'application/json',
-                    'x-goog-api-key': client['api_key']
-                }
-                
-                data = {
-                    "contents": [{"parts": [{"text": message}]}],
-                    "generationConfig": {
-                        "temperature": temperature,
-                        "maxOutputTokens": max_tokens
-                    }
-                }
-                
-                response = requests.post(
-                    f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
-                    headers=headers,
-                    json=data
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    return result['candidates'][0]['content']['parts'][0]['text']
-                else:
-                    raise Exception(f"Google AI API error: {response.text}")
-            
-            elif model in ['llama3', 'mistral', 'codellama']:
-                # Ollama models
-                client = self._get_ollama_client()
-                response = requests.post(
-                    f"{client['base_url']}/api/generate",
-                    json={
-                        "model": model,
-                        "prompt": message,
-                        "stream": False
-                    }
-                )
-                
-                if response.status_code == 200:
-                    return response.json()['response']
-                else:
-                    raise Exception(f"Ollama API error: {response.text}")
-            
-            else:
-                raise ValueError(f"Unsupported model: {model}")
+            )
+            return response.text
         
-        except Exception as e:
-            return f"Error: {str(e)}"
-    
-    def generate_image(self, prompt, model='dall-e-3', size='1024x1024', quality='standard'):
-        """Generate image using AI provider"""
-        try:
-            if model.startswith('dall-e'):
-                # OpenAI DALL-E
-                client = self._get_openai_client()
-                response = client.images.generate(
-                    model=model,
-                    prompt=prompt,
-                    size=size,
-                    quality=quality,
-                    n=1
-                )
-                return response.data[0].url
+        else:
+            raise ValueError(f"Unsupported provider: {provider}")
             
-            elif model == 'midjourney':
-                # Midjourney API (requires separate service)
-                # This would integrate with Midjourney API
-                return "https://example.com/midjourney-image.png"
+    except Exception as e:
+        logging.error(f"Error generating response with {provider}/{model}: {e}")
+        raise
+
+def generate_image(prompt: str, provider: str = 'openai', model: str = 'dall-e-3',
+                  style: str = 'realistic', size: str = '1024x1024') -> Dict[str, Any]:
+    """Generate image using AI provider"""
+    try:
+        if provider == 'openai':
+            client = get_provider_client('openai')
             
-            elif model == 'stable-diffusion':
-                # Stable Diffusion API
-                # This would integrate with Stability AI API
-                return "https://example.com/stable-diffusion-image.png"
+            # Enhance prompt based on style
+            enhanced_prompt = enhance_image_prompt(prompt, style)
             
-            else:
-                raise ValueError(f"Unsupported image model: {model}")
-        
-        except Exception as e:
-            raise Exception(f"Image generation error: {str(e)}")
-    
-    def get_embeddings(self, text, model='text-embedding-3-small'):
-        """Get text embeddings"""
-        try:
-            if model.startswith('text-embedding'):
-                # OpenAI embeddings
-                client = self._get_openai_client()
-                response = client.embeddings.create(
-                    model=model,
-                    input=text
-                )
-                return response.data[0].embedding
+            response = client.images.generate(
+                model=model,
+                prompt=enhanced_prompt,
+                size=size,
+                quality="hd" if model == 'dall-e-3' else "standard",
+                n=1
+            )
             
-            elif model.startswith('embed-'):
-                # Cohere embeddings
-                client = self._get_cohere_client()
-                headers = {
-                    'Authorization': f'Bearer {client["api_key"]}',
-                    'Content-Type': 'application/json'
-                }
-                
-                data = {
-                    "texts": [text],
-                    "model": model
-                }
-                
-                response = requests.post(
-                    'https://api.cohere.ai/v1/embed',
-                    headers=headers,
-                    json=data
-                )
-                
-                if response.status_code == 200:
-                    return response.json()['embeddings'][0]
-                else:
-                    raise Exception(f"Cohere API error: {response.text}")
-            
-            else:
-                raise ValueError(f"Unsupported embedding model: {model}")
-        
-        except Exception as e:
-            raise Exception(f"Embedding error: {str(e)}")
-    
-    def get_available_models(self):
-        """Get list of available models"""
-        return {
-            'chat': {
-                'openai': ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
-                'anthropic': ['claude-sonnet-4-20250514', 'claude-3-7-sonnet-20250219', 'claude-3-haiku-20240307'],
-                'google': ['gemini-pro', 'gemini-pro-vision'],
-                'ollama': ['llama3', 'mistral', 'codellama']
-            },
-            'image': {
-                'openai': ['dall-e-3', 'dall-e-2'],
-                'midjourney': ['midjourney'],
-                'stability': ['stable-diffusion-xl', 'stable-diffusion-2']
-            },
-            'embedding': {
-                'openai': ['text-embedding-3-small', 'text-embedding-3-large'],
-                'cohere': ['embed-english-v3.0', 'embed-multilingual-v3.0']
+            return {
+                'url': response.data[0].url,
+                'revised_prompt': getattr(response.data[0], 'revised_prompt', prompt)
             }
+        
+        elif provider == 'midjourney':
+            # Placeholder for Midjourney integration
+            # In a real implementation, you would integrate with Midjourney API
+            raise NotImplementedError("Midjourney integration not implemented")
+        
+        elif provider == 'stable_diffusion':
+            # Placeholder for Stable Diffusion integration
+            raise NotImplementedError("Stable Diffusion integration not implemented")
+        
+        else:
+            raise ValueError(f"Unsupported image provider: {provider}")
+            
+    except Exception as e:
+        logging.error(f"Error generating image with {provider}/{model}: {e}")
+        raise
+
+def enhance_image_prompt(prompt: str, style: str) -> str:
+    """Enhance image prompt based on style"""
+    style_enhancements = {
+        'realistic': 'photorealistic, high quality, detailed',
+        'artistic': 'artistic style, creative interpretation, beautiful',
+        'cartoon': 'cartoon style, animated, colorful',
+        'sketch': 'hand-drawn sketch, pencil drawing, artistic',
+        'abstract': 'abstract art, modern, creative',
+        'digital_art': 'digital art, concept art, highly detailed',
+        'oil_painting': 'oil painting style, classical art, masterpiece',
+        'watercolor': 'watercolor painting, soft colors, artistic'
+    }
+    
+    enhancement = style_enhancements.get(style, '')
+    if enhancement:
+        return f"{prompt}, {enhancement}"
+    return prompt
+
+def get_available_models() -> Dict[str, List[Dict]]:
+    """Get list of available models for each provider"""
+    models = {
+        'openai': [
+            {
+                'id': 'gpt-4o',
+                'name': 'GPT-4 Omni',
+                'description': 'Most capable multimodal model',
+                'context_window': 128000,
+                'capabilities': ['text', 'vision', 'function_calling']
+            },
+            {
+                'id': 'gpt-4o-mini',
+                'name': 'GPT-4 Omni Mini',
+                'description': 'Faster and more affordable GPT-4',
+                'context_window': 128000,
+                'capabilities': ['text', 'vision', 'function_calling']
+            },
+            {
+                'id': 'gpt-3.5-turbo',
+                'name': 'GPT-3.5 Turbo',
+                'description': 'Fast and capable for most tasks',
+                'context_window': 16385,
+                'capabilities': ['text', 'function_calling']
+            }
+        ],
+        'anthropic': [
+            {
+                'id': 'claude-sonnet-4-20250514',
+                'name': 'Claude 4 Sonnet',
+                'description': 'Most capable Claude model',
+                'context_window': 200000,
+                'capabilities': ['text', 'vision', 'function_calling']
+            },
+            {
+                'id': 'claude-3-5-sonnet-20241022',
+                'name': 'Claude 3.5 Sonnet',
+                'description': 'Previous generation Claude',
+                'context_window': 200000,
+                'capabilities': ['text', 'vision', 'function_calling']
+            }
+        ],
+        'google': [
+            {
+                'id': 'gemini-1.5-pro',
+                'name': 'Gemini 1.5 Pro',
+                'description': 'Extremely large context window',
+                'context_window': 2000000,
+                'capabilities': ['text', 'vision', 'function_calling']
+            },
+            {
+                'id': 'gemini-1.5-flash',
+                'name': 'Gemini 1.5 Flash',
+                'description': 'Fast and efficient',
+                'context_window': 1000000,
+                'capabilities': ['text', 'vision', 'function_calling']
+            }
+        ]
+    }
+    
+    # Filter models based on available API keys
+    available_models = {}
+    
+    if os.environ.get('OPENAI_API_KEY'):
+        available_models['openai'] = models['openai']
+    
+    if os.environ.get('ANTHROPIC_API_KEY'):
+        available_models['anthropic'] = models['anthropic']
+    
+    if os.environ.get('GOOGLE_API_KEY'):
+        available_models['google'] = models['google']
+    
+    return available_models
+
+def validate_model_config(provider: str, model: str) -> bool:
+    """Validate if model is available for provider"""
+    available_models = get_available_models()
+    
+    if provider not in available_models:
+        return False
+    
+    provider_models = [m['id'] for m in available_models[provider]]
+    return model in provider_models
+
+def estimate_tokens(text: str) -> int:
+    """Estimate token count for text (simplified)"""
+    # Simple estimation: ~4 characters per token
+    return len(text) // 4
+
+def calculate_cost(provider: str, model: str, input_tokens: int, output_tokens: int) -> float:
+    """Calculate API cost based on provider and token usage"""
+    # Simplified cost calculation (actual costs may vary)
+    cost_per_1k_tokens = {
+        'openai': {
+            'gpt-4o': {'input': 0.005, 'output': 0.015},
+            'gpt-4o-mini': {'input': 0.00015, 'output': 0.0006},
+            'gpt-3.5-turbo': {'input': 0.0005, 'output': 0.0015}
+        },
+        'anthropic': {
+            'claude-sonnet-4-20250514': {'input': 0.003, 'output': 0.015},
+            'claude-3-5-sonnet-20241022': {'input': 0.003, 'output': 0.015}
+        },
+        'google': {
+            'gemini-1.5-pro': {'input': 0.00125, 'output': 0.005},
+            'gemini-1.5-flash': {'input': 0.000075, 'output': 0.0003}
         }
+    }
+    
+    if provider not in cost_per_1k_tokens or model not in cost_per_1k_tokens[provider]:
+        return 0.0
+    
+    rates = cost_per_1k_tokens[provider][model]
+    input_cost = (input_tokens / 1000) * rates['input']
+    output_cost = (output_tokens / 1000) * rates['output']
+    
+    return input_cost + output_cost
+
+def get_embedding(text: str, model: str = 'text-embedding-3-small') -> List[float]:
+    """Generate text embedding using OpenAI"""
+    try:
+        client = get_provider_client('openai')
+        
+        response = client.embeddings.create(
+            model=model,
+            input=text
+        )
+        
+        return response.data[0].embedding
+        
+    except Exception as e:
+        logging.error(f"Error generating embedding: {e}")
+        raise
+
+def transcribe_audio(audio_file_path: str) -> str:
+    """Transcribe audio using OpenAI Whisper"""
+    try:
+        client = get_provider_client('openai')
+        
+        with open(audio_file_path, 'rb') as audio_file:
+            response = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+        
+        return response.text
+        
+    except Exception as e:
+        logging.error(f"Error transcribing audio: {e}")
+        raise
+
+def text_to_speech(text: str, voice: str = 'alloy') -> bytes:
+    """Convert text to speech using OpenAI TTS"""
+    try:
+        client = get_provider_client('openai')
+        
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=text
+        )
+        
+        return response.content
+        
+    except Exception as e:
+        logging.error(f"Error generating speech: {e}")
+        raise

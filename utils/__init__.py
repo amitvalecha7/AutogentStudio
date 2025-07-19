@@ -1,1 +1,1 @@
-# Utils package for Autogent Studio
+# Utils package initialization

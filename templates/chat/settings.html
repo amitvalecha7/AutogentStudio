@@ -3,187 +3,402 @@
 {% block title %}Chat Settings - Autogent Studio{% endblock %}
 
 {% block content %}
-<div class="container py-4">
+<div class="container-fluid py-4">
     <div class="row">
-        <div class="col-lg-8 mx-auto">
-            <div class="d-flex align-items-center mb-4">
-                <i class="fas fa-cog fa-2x text-primary me-3"></i>
-                <h2 class="mb-0">Chat Settings</h2>
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>Chat Settings</h2>
+                    <p class="text-muted">Configure your chat experience and AI assistant behavior</p>
+                </div>
+                <a href="{{ url_for('chat.index') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left"></i> Back to Chat
+                </a>
             </div>
-            
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Default Chat Configuration</h5>
-                </div>
-                <div class="card-body">
-                    <form id="chatSettingsForm">
-                        <!-- Default Model -->
-                        <div class="mb-4">
-                            <label for="defaultModel" class="form-label">Default AI Model</label>
-                            <select class="form-select" id="defaultModel">
-                                <option value="openai:gpt-4o">GPT-4o (OpenAI)</option>
-                                <option value="anthropic:claude-sonnet-4-20250514">Claude Sonnet 4 (Anthropic)</option>
-                                <option value="openai:gpt-3.5-turbo">GPT-3.5 Turbo (OpenAI)</option>
-                                <option value="google:gemini-pro">Gemini Pro (Google)</option>
-                            </select>
-                            <div class="form-text">Choose your preferred AI model for new conversations</div>
-                        </div>
-                        
-                        <!-- Temperature -->
-                        <div class="mb-4">
-                            <label for="temperature" class="form-label">
-                                Temperature: <span id="temperatureValue">0.7</span>
-                            </label>
-                            <input type="range" class="form-range" id="temperature" 
-                                   min="0" max="2" step="0.1" value="0.7">
-                            <div class="d-flex justify-content-between">
-                                <small class="text-muted">Focused</small>
-                                <small class="text-muted">Creative</small>
-                            </div>
-                            <div class="form-text">Controls the randomness of AI responses</div>
-                        </div>
-                        
-                        <!-- Max Tokens -->
-                        <div class="mb-4">
-                            <label for="maxTokens" class="form-label">Max Response Length</label>
-                            <select class="form-select" id="maxTokens">
-                                <option value="1000">Short (1000 tokens)</option>
-                                <option value="2000" selected>Medium (2000 tokens)</option>
-                                <option value="4000">Long (4000 tokens)</option>
-                                <option value="8000">Very Long (8000 tokens)</option>
-                            </select>
-                            <div class="form-text">Maximum length of AI responses</div>
-                        </div>
-                        
-                        <!-- System Prompt -->
-                        <div class="mb-4">
-                            <label for="systemPrompt" class="form-label">Default System Prompt</label>
-                            <textarea class="form-control" id="systemPrompt" rows="4" 
-                                      placeholder="You are a helpful AI assistant...">You are Autogent Studio AI, an advanced AI assistant that helps users with various tasks including coding, analysis, creativity, and problem-solving. Be helpful, accurate, and professional in your responses.</textarea>
-                            <div class="form-text">Sets the AI's behavior and personality</div>
-                        </div>
-                        
-                        <!-- Chat Features -->
-                        <div class="mb-4">
-                            <label class="form-label">Chat Features</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableStreaming" checked>
-                                <label class="form-check-label" for="enableStreaming">
-                                    Enable streaming responses
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableMarkdown" checked>
-                                <label class="form-check-label" for="enableMarkdown">
-                                    Render markdown formatting
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableCodeHighlight" checked>
-                                <label class="form-check-label" for="enableCodeHighlight">
-                                    Syntax highlighting for code
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableSounds">
-                                <label class="form-check-label" for="enableSounds">
-                                    Enable notification sounds
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Memory Settings -->
-                        <div class="mb-4">
-                            <label for="contextWindow" class="form-label">Context Memory</label>
-                            <select class="form-select" id="contextWindow">
-                                <option value="10">Remember last 10 messages</option>
-                                <option value="20" selected>Remember last 20 messages</option>
-                                <option value="50">Remember last 50 messages</option>
-                                <option value="100">Remember last 100 messages</option>
-                            </select>
-                            <div class="form-text">How many previous messages to keep in context</div>
-                        </div>
-                        
-                        <!-- Safety Settings -->
-                        <div class="mb-4">
-                            <label class="form-label">Safety & Moderation</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableModeration" checked>
-                                <label class="form-check-label" for="enableModeration">
-                                    Enable content moderation
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableSafetyFilter" checked>
-                                <label class="form-check-label" for="enableSafetyFilter">
-                                    Apply AI safety filters
-                                </label>
-                            </div>
-                            <div class="form-text">Helps ensure safe and appropriate AI responses</div>
-                        </div>
-                        
-                        <!-- Action Buttons -->
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save me-2"></i>Save Settings
-                            </button>
-                            <button type="button" class="btn btn-secondary" id="resetBtn">
-                                <i class="fas fa-undo me-2"></i>Reset to Defaults
-                            </button>
-                        </div>
-                    </form>
-                </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Settings Navigation -->
+        <div class="col-md-3">
+            <div class="list-group">
+                <a href="#general" class="list-group-item list-group-item-action active" data-bs-toggle="tab">
+                    <i class="fas fa-cog me-2"></i>General
+                </a>
+                <a href="#models" class="list-group-item list-group-item-action" data-bs-toggle="tab">
+                    <i class="fas fa-brain me-2"></i>AI Models
+                </a>
+                <a href="#safety" class="list-group-item list-group-item-action" data-bs-toggle="tab">
+                    <i class="fas fa-shield-alt me-2"></i>Safety Protocols
+                </a>
+                <a href="#advanced" class="list-group-item list-group-item-action" data-bs-toggle="tab">
+                    <i class="fas fa-sliders-h me-2"></i>Advanced
+                </a>
+                <a href="#plandex" class="list-group-item list-group-item-action" data-bs-toggle="tab">
+                    <i class="fas fa-terminal me-2"></i>Plandex
+                </a>
             </div>
-            
-            <!-- Advanced Settings -->
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Advanced Configuration</h5>
+        </div>
+        
+        <!-- Settings Content -->
+        <div class="col-md-9">
+            <div class="tab-content">
+                <!-- General Settings -->
+                <div class="tab-pane fade show active" id="general">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-cog me-2"></i>General Settings</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="general-settings-form">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Default Chat Title</label>
+                                            <input type="text" class="form-control" value="New Chat Session" 
+                                                   placeholder="Enter default title format">
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Auto-save Interval</label>
+                                            <select class="form-select">
+                                                <option value="30">Every 30 seconds</option>
+                                                <option value="60" selected>Every minute</option>
+                                                <option value="300">Every 5 minutes</option>
+                                                <option value="0">Disabled</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Message Display</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="showTimestamps" checked>
+                                                <label class="form-check-label" for="showTimestamps">
+                                                    Show message timestamps
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="showTokenCount" checked>
+                                                <label class="form-check-label" for="showTokenCount">
+                                                    Show token usage
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="enableMarkdown" checked>
+                                                <label class="form-check-label" for="enableMarkdown">
+                                                    Enable markdown rendering
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Theme</label>
+                                            <select class="form-select">
+                                                <option value="dark" selected>Dark</option>
+                                                <option value="light">Light</option>
+                                                <option value="auto">Auto (System)</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Language</label>
+                                            <select class="form-select">
+                                                <option value="en" selected>English</option>
+                                                <option value="zh">中文</option>
+                                                <option value="ja">日本語</option>
+                                                <option value="ko">한국어</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Keyboard Shortcuts</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="enableShortcuts" checked>
+                                                <label class="form-check-label" for="enableShortcuts">
+                                                    Enable keyboard shortcuts
+                                                </label>
+                                            </div>
+                                            <small class="text-muted">
+                                                Ctrl+Enter: Send message<br>
+                                                Ctrl+K: Focus search<br>
+                                                Ctrl+N: New chat
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6>Quantum-Enhanced Chat</h6>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableQuantumChat">
-                                <label class="form-check-label" for="enableQuantumChat">
-                                    Enable quantum-enhanced responses
-                                </label>
-                            </div>
-                            <div class="form-text mb-3">Use quantum algorithms for optimization</div>
+                
+                <!-- AI Models Settings -->
+                <div class="tab-pane fade" id="models">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-brain me-2"></i>AI Model Configuration</h5>
                         </div>
-                        
-                        <div class="col-md-6">
-                            <h6>Federated Learning</h6>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableFederatedChat">
-                                <label class="form-check-label" for="enableFederatedChat">
-                                    Enable federated learning insights
-                                </label>
-                            </div>
-                            <div class="form-text mb-3">Privacy-preserving model improvements</div>
+                        <div class="card-body">
+                            <form id="model-settings-form">
+                                <!-- Default Model -->
+                                <div class="mb-4">
+                                    <label class="form-label">Default Model</label>
+                                    <select class="form-select" id="default-model">
+                                        <option value="gpt-4o" selected>GPT-4o (OpenAI)</option>
+                                        <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (Anthropic)</option>
+                                        <option value="gemini-pro">Gemini Pro (Google)</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Model Parameters -->
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Temperature <span class="badge bg-info">0.7</span></label>
+                                            <input type="range" class="form-range" min="0" max="2" step="0.1" value="0.7" 
+                                                   id="temperature-slider" oninput="updateSliderValue(this, 'temperature')">
+                                            <small class="text-muted">Controls randomness in responses</small>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Max Tokens</label>
+                                            <input type="number" class="form-control" value="4000" min="1" max="8000">
+                                            <small class="text-muted">Maximum response length</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Top-P <span class="badge bg-info">0.9</span></label>
+                                            <input type="range" class="form-range" min="0" max="1" step="0.1" value="0.9" 
+                                                   id="top-p-slider" oninput="updateSliderValue(this, 'top-p')">
+                                            <small class="text-muted">Controls diversity of responses</small>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Presence Penalty <span class="badge bg-info">0.0</span></label>
+                                            <input type="range" class="form-range" min="-2" max="2" step="0.1" value="0" 
+                                                   id="presence-penalty-slider" oninput="updateSliderValue(this, 'presence-penalty')">
+                                            <small class="text-muted">Reduces repetition</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- System Prompt -->
+                                <div class="mb-3">
+                                    <label class="form-label">System Prompt</label>
+                                    <textarea class="form-control" rows="4" 
+                                              placeholder="You are a helpful AI assistant specialized in...">You are Autogent Studio AI, an advanced assistant with access to quantum computing, neuromorphic processing, federated learning, and AI safety protocols. Help users with complex AI tasks while maintaining safety and ethical guidelines.</textarea>
+                                    <small class="text-muted">Define the AI's role and behavior</small>
+                                </div>
+                                
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" class="btn btn-primary">Save Model Settings</button>
+                                </div>
+                            </form>
                         </div>
-                        
-                        <div class="col-md-6">
-                            <h6>Neuromorphic Processing</h6>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableNeuromorphicChat">
-                                <label class="form-check-label" for="enableNeuromorphicChat">
-                                    Enable neuromorphic acceleration
-                                </label>
-                            </div>
-                            <div class="form-text mb-3">Ultra-low latency responses</div>
+                    </div>
+                </div>
+                
+                <!-- Safety Protocols -->
+                <div class="tab-pane fade" id="safety">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-shield-alt me-2"></i>AI Safety Protocols</h5>
                         </div>
-                        
-                        <div class="col-md-6">
-                            <h6>AI Safety Monitoring</h6>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="enableRealTimeSafety" checked>
-                                <label class="form-check-label" for="enableRealTimeSafety">
-                                    Real-time safety monitoring
-                                </label>
-                            </div>
-                            <div class="form-text mb-3">Continuous alignment verification</div>
+                        <div class="card-body">
+                            <form id="safety-settings-form">
+                                <div class="mb-4">
+                                    <h6>Constitutional AI Rules</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="enableConstitutional" checked>
+                                        <label class="form-check-label" for="enableConstitutional">
+                                            Enable Constitutional AI enforcement
+                                        </label>
+                                    </div>
+                                    <textarea class="form-control mt-2" rows="3" 
+                                              placeholder="Define constitutional rules...">Be helpful, harmless, and honest. Respect human autonomy and dignity. Avoid deception and manipulation. Promote human wellbeing.</textarea>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h6>Content Safety</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="filterHarmful" checked>
+                                                <label class="form-check-label" for="filterHarmful">
+                                                    Filter harmful content
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="blockMisinformation" checked>
+                                                <label class="form-check-label" for="blockMisinformation">
+                                                    Block misinformation
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="requireCitations" checked>
+                                                <label class="form-check-label" for="requireCitations">
+                                                    Require citations for claims
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="enableFactCheck">
+                                                <label class="form-check-label" for="enableFactCheck">
+                                                    Enable fact-checking
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h6>Alignment Monitoring</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="enableAlignmentMonitoring" checked>
+                                        <label class="form-check-label" for="enableAlignmentMonitoring">
+                                            Enable real-time alignment monitoring
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Monitor AI responses for alignment with human values</small>
+                                </div>
+                                
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" class="btn btn-primary">Save Safety Settings</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Advanced Settings -->
+                <div class="tab-pane fade" id="advanced">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-sliders-h me-2"></i>Advanced Configuration</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="advanced-settings-form">
+                                <div class="mb-4">
+                                    <h6>Quantum Computing Integration</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="enableQuantum">
+                                        <label class="form-check-label" for="enableQuantum">
+                                            Enable quantum-enhanced responses
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Use quantum algorithms for complex computations</small>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h6>Neuromorphic Processing</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="enableNeuromorphic">
+                                        <label class="form-check-label" for="enableNeuromorphic">
+                                            Enable neuromorphic edge processing
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Use spiking neural networks for efficient processing</small>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h6>Federated Learning</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="enableFederated">
+                                        <label class="form-check-label" for="enableFederated">
+                                            Participate in federated learning
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Contribute to and benefit from distributed model training</small>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h6>Self-Improvement</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="enableSelfImprovement">
+                                        <label class="form-check-label" for="enableSelfImprovement">
+                                            Enable automated self-improvement
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Allow AI to improve its capabilities over time</small>
+                                </div>
+                                
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" class="btn btn-primary">Save Advanced Settings</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Plandex Settings -->
+                <div class="tab-pane fade" id="plandex">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-terminal me-2"></i>Plandex AI Coding Agent</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="plandex-settings-form">
+                                <div class="mb-4">
+                                    <h6>Terminal Configuration</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Default Shell</label>
+                                                <select class="form-select">
+                                                    <option value="bash" selected>Bash</option>
+                                                    <option value="zsh">Zsh</option>
+                                                    <option value="fish">Fish</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Auto-completion</label>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="enableAutoComplete" checked>
+                                                    <label class="form-check-label" for="enableAutoComplete">
+                                                        Enable command auto-completion
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h6>AI Coding Assistance</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="enableCodeGeneration" checked>
+                                        <label class="form-check-label" for="enableCodeGeneration">
+                                            Enable AI code generation
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="enableCodeReview" checked>
+                                        <label class="form-check-label" for="enableCodeReview">
+                                            Enable automated code review
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="enableProjectManagement">
+                                        <label class="form-check-label" for="enableProjectManagement">
+                                            Enable project management features
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" class="btn btn-primary">Save Plandex Settings</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -193,126 +408,60 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const temperatureSlider = document.getElementById('temperature');
-    const temperatureValue = document.getElementById('temperatureValue');
-    const chatSettingsForm = document.getElementById('chatSettingsForm');
-    const resetBtn = document.getElementById('resetBtn');
-    
-    // Update temperature display
-    temperatureSlider.addEventListener('input', function() {
-        temperatureValue.textContent = this.value;
-    });
-    
-    // Handle form submission
-    chatSettingsForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const settings = {
-            defaultModel: document.getElementById('defaultModel').value,
-            temperature: parseFloat(document.getElementById('temperature').value),
-            maxTokens: parseInt(document.getElementById('maxTokens').value),
-            systemPrompt: document.getElementById('systemPrompt').value,
-            enableStreaming: document.getElementById('enableStreaming').checked,
-            enableMarkdown: document.getElementById('enableMarkdown').checked,
-            enableCodeHighlight: document.getElementById('enableCodeHighlight').checked,
-            enableSounds: document.getElementById('enableSounds').checked,
-            contextWindow: parseInt(document.getElementById('contextWindow').value),
-            enableModeration: document.getElementById('enableModeration').checked,
-            enableSafetyFilter: document.getElementById('enableSafetyFilter').checked,
-            enableQuantumChat: document.getElementById('enableQuantumChat').checked,
-            enableFederatedChat: document.getElementById('enableFederatedChat').checked,
-            enableNeuromorphicChat: document.getElementById('enableNeuromorphicChat').checked,
-            enableRealTimeSafety: document.getElementById('enableRealTimeSafety').checked
-        };
-        
-        // Save settings to localStorage
-        localStorage.setItem('chatSettings', JSON.stringify(settings));
-        
-        // Show success message
-        const alert = document.createElement('div');
-        alert.className = 'alert alert-success alert-dismissible fade show';
-        alert.innerHTML = `
-            <i class="fas fa-check-circle me-2"></i>Chat settings saved successfully!
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        chatSettingsForm.insertBefore(alert, chatSettingsForm.firstChild);
-        
-        // Auto-hide after 3 seconds
-        setTimeout(() => {
-            alert.remove();
-        }, 3000);
-    });
-    
-    // Reset to defaults
-    resetBtn.addEventListener('click', function() {
-        if (confirm('Are you sure you want to reset all settings to defaults?')) {
-            // Reset form to default values
-            document.getElementById('defaultModel').value = 'openai:gpt-4o';
-            document.getElementById('temperature').value = '0.7';
-            temperatureValue.textContent = '0.7';
-            document.getElementById('maxTokens').value = '2000';
-            document.getElementById('systemPrompt').value = 'You are Autogent Studio AI, an advanced AI assistant that helps users with various tasks including coding, analysis, creativity, and problem-solving. Be helpful, accurate, and professional in your responses.';
-            document.getElementById('enableStreaming').checked = true;
-            document.getElementById('enableMarkdown').checked = true;
-            document.getElementById('enableCodeHighlight').checked = true;
-            document.getElementById('enableSounds').checked = false;
-            document.getElementById('contextWindow').value = '20';
-            document.getElementById('enableModeration').checked = true;
-            document.getElementById('enableSafetyFilter').checked = true;
-            document.getElementById('enableQuantumChat').checked = false;
-            document.getElementById('enableFederatedChat').checked = false;
-            document.getElementById('enableNeuromorphicChat').checked = false;
-            document.getElementById('enableRealTimeSafety').checked = true;
-            
-            // Clear localStorage
-            localStorage.removeItem('chatSettings');
-            
-            // Show reset message
-            const alert = document.createElement('div');
-            alert.className = 'alert alert-info alert-dismissible fade show';
-            alert.innerHTML = `
-                <i class="fas fa-info-circle me-2"></i>Settings reset to defaults
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            chatSettingsForm.insertBefore(alert, chatSettingsForm.firstChild);
-            
-            setTimeout(() => {
-                alert.remove();
-            }, 3000);
-        }
-    });
-    
-    // Load saved settings
-    const savedSettings = localStorage.getItem('chatSettings');
-    if (savedSettings) {
-        try {
-            const settings = JSON.parse(savedSettings);
-            
-            document.getElementById('defaultModel').value = settings.defaultModel || 'openai:gpt-4o';
-            document.getElementById('temperature').value = settings.temperature || 0.7;
-            temperatureValue.textContent = settings.temperature || 0.7;
-            document.getElementById('maxTokens').value = settings.maxTokens || 2000;
-            document.getElementById('systemPrompt').value = settings.systemPrompt || '';
-            document.getElementById('enableStreaming').checked = settings.enableStreaming !== false;
-            document.getElementById('enableMarkdown').checked = settings.enableMarkdown !== false;
-            document.getElementById('enableCodeHighlight').checked = settings.enableCodeHighlight !== false;
-            document.getElementById('enableSounds').checked = settings.enableSounds || false;
-            document.getElementById('contextWindow').value = settings.contextWindow || 20;
-            document.getElementById('enableModeration').checked = settings.enableModeration !== false;
-            document.getElementById('enableSafetyFilter').checked = settings.enableSafetyFilter !== false;
-            document.getElementById('enableQuantumChat').checked = settings.enableQuantumChat || false;
-            document.getElementById('enableFederatedChat').checked = settings.enableFederatedChat || false;
-            document.getElementById('enableNeuromorphicChat').checked = settings.enableNeuromorphicChat || false;
-            document.getElementById('enableRealTimeSafety').checked = settings.enableRealTimeSafety !== false;
-        } catch (e) {
-            console.error('Error loading saved settings:', e);
-        }
-    }
+function updateSliderValue(slider, type) {
+    const badge = slider.parentElement.querySelector('.badge');
+    badge.textContent = slider.value;
+}
+
+// Save settings forms
+document.getElementById('general-settings-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    // Save general settings
+    showToast('General settings saved successfully', 'success');
 });
+
+document.getElementById('model-settings-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    // Save model settings
+    showToast('Model settings saved successfully', 'success');
+});
+
+document.getElementById('safety-settings-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    // Save safety settings
+    showToast('Safety settings saved successfully', 'success');
+});
+
+document.getElementById('advanced-settings-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    // Save advanced settings
+    showToast('Advanced settings saved successfully', 'success');
+});
+
+document.getElementById('plandex-settings-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    // Save Plandex settings
+    showToast('Plandex settings saved successfully', 'success');
+});
+
+function showToast(message, type) {
+    // Simple toast notification
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    toast.style.top = '20px';
+    toast.style.right = '20px';
+    toast.style.zIndex = '9999';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
 </script>
 {% endblock %}

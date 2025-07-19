@@ -1,392 +1,352 @@
-from flask import Blueprint, render_template, request, jsonify, session
-from app import db
-from models import User
-from blueprints.auth import login_required, get_current_user
-import logging
-import json
-from datetime import datetime
+from flask import Blueprint, render_template, request, jsonify
+from flask_login import login_required, current_user
+from models import Workflow, WorkflowExecution, db
+from services.orchestration_service import OrchestrationService
+import uuid
 
-orchestration_bp = Blueprint('orchestration', __name__)
+orchestration_bp = Blueprint('orchestration', __name__, url_prefix='/orchestration')
 
 @orchestration_bp.route('/')
 @login_required
-def orchestration_index():
-    user = get_current_user()
+def index():
+    # Get user's workflows
+    workflows = Workflow.query.filter_by(
+        user_id=current_user.id
+    ).order_by(Workflow.created_at.desc()).all()
     
-    # Simulate existing workflows
-    workflows = [
-        {
-            'id': 1,
-            'name': 'AI Model Training Pipeline',
-            'description': 'Complete pipeline for training custom AI models',
-            'nodes': 8,
-            'status': 'active',
-            'created_at': datetime.utcnow().isoformat(),
-            'last_run': datetime.utcnow().isoformat(),
-            'success_rate': 95.2
-        },
-        {
-            'id': 2,
-            'name': 'Quantum-Classical Hybrid Workflow',
-            'description': 'Hybrid quantum-classical optimization pipeline',
-            'nodes': 12,
-            'status': 'draft',
-            'created_at': datetime.utcnow().isoformat(),
-            'last_run': None,
-            'success_rate': None
-        },
-        {
-            'id': 3,
-            'name': 'Federated Learning Orchestration',
-            'description': 'Multi-node federated learning coordination',
-            'nodes': 15,
-            'status': 'running',
-            'created_at': datetime.utcnow().isoformat(),
-            'last_run': datetime.utcnow().isoformat(),
-            'success_rate': 87.8
-        }
-    ]
-    
-    return render_template('orchestration/orchestration.html', 
-                         user=user, 
-                         workflows=workflows)
+    return render_template('orchestration/index.html', workflows=workflows)
 
-@orchestration_bp.route('/create', methods=['GET', 'POST'])
+@orchestration_bp.route('/editor')
+@login_required
+def editor():
+    return render_template('orchestration/editor.html')
+
+@orchestration_bp.route('/workflow/<workflow_id>')
+@login_required
+def view_workflow(workflow_id):
+    workflow = Workflow.query.filter_by(
+        id=workflow_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    # Get execution history
+    executions = WorkflowExecution.query.filter_by(
+        workflow_id=workflow_id
+    ).order_by(WorkflowExecution.start_time.desc()).limit(20).all()
+    
+    return render_template('orchestration/workflow_detail.html', 
+                         workflow=workflow, 
+                         executions=executions)
+
+@orchestration_bp.route('/create-workflow', methods=['POST'])
 @login_required
 def create_workflow():
-    user = get_current_user()
-    
-    if request.method == 'POST':
-        data = request.get_json()
-        
-        workflow_name = data.get('name')
-        workflow_data = data.get('workflow_data')
-        
-        if not workflow_name or not workflow_data:
-            return jsonify({'error': 'Workflow name and data are required'}), 400
-        
-        try:
-            # In a real implementation, save workflow to database
-            workflow_id = 123  # Placeholder
-            
-            logging.info(f"Workflow created: {workflow_id} by user {user.id}")
-            return jsonify({
-                'success': True,
-                'workflow_id': workflow_id,
-                'message': 'Workflow created successfully'
-            })
-        
-        except Exception as e:
-            logging.error(f"Error creating workflow: {str(e)}")
-            return jsonify({'error': 'Failed to create workflow'}), 500
-    
-    # Available node types for the workflow editor
-    node_types = [
-        {
-            'category': 'Input/Output',
-            'nodes': [
-                {'type': 'input', 'name': 'Data Input', 'icon': 'fa-upload'},
-                {'type': 'output', 'name': 'Data Output', 'icon': 'fa-download'},
-                {'type': 'file-input', 'name': 'File Input', 'icon': 'fa-file'},
-                {'type': 'api-input', 'name': 'API Input', 'icon': 'fa-plug'}
-            ]
-        },
-        {
-            'category': 'AI Models',
-            'nodes': [
-                {'type': 'openai-model', 'name': 'OpenAI Model', 'icon': 'fa-brain'},
-                {'type': 'anthropic-model', 'name': 'Anthropic Model', 'icon': 'fa-robot'},
-                {'type': 'custom-model', 'name': 'Custom Model', 'icon': 'fa-cogs'},
-                {'type': 'embedding-model', 'name': 'Embedding Model', 'icon': 'fa-vector-square'}
-            ]
-        },
-        {
-            'category': 'Quantum Computing',
-            'nodes': [
-                {'type': 'quantum-circuit', 'name': 'Quantum Circuit', 'icon': 'fa-atom'},
-                {'type': 'quantum-simulator', 'name': 'Quantum Simulator', 'icon': 'fa-calculator'},
-                {'type': 'quantum-optimizer', 'name': 'Quantum Optimizer', 'icon': 'fa-magic'},
-                {'type': 'hybrid-classical-quantum', 'name': 'Hybrid CQ', 'icon': 'fa-infinity'}
-            ]
-        },
-        {
-            'category': 'Federated Learning',
-            'nodes': [
-                {'type': 'federated-aggregator', 'name': 'Fed Aggregator', 'icon': 'fa-network-wired'},
-                {'type': 'federated-client', 'name': 'Fed Client', 'icon': 'fa-users'},
-                {'type': 'privacy-filter', 'name': 'Privacy Filter', 'icon': 'fa-shield-alt'},
-                {'type': 'differential-privacy', 'name': 'Diff Privacy', 'icon': 'fa-mask'}
-            ]
-        },
-        {
-            'category': 'Neuromorphic Computing',
-            'nodes': [
-                {'type': 'snn-model', 'name': 'SNN Model', 'icon': 'fa-project-diagram'},
-                {'type': 'spike-encoder', 'name': 'Spike Encoder', 'icon': 'fa-wave-square'},
-                {'type': 'neuromorphic-device', 'name': 'Neuro Device', 'icon': 'fa-microchip'},
-                {'type': 'edge-optimizer', 'name': 'Edge Optimizer', 'icon': 'fa-bolt'}
-            ]
-        },
-        {
-            'category': 'AI Safety',
-            'nodes': [
-                {'type': 'alignment-checker', 'name': 'Alignment Check', 'icon': 'fa-check-circle'},
-                {'type': 'bias-detector', 'name': 'Bias Detector', 'icon': 'fa-balance-scale'},
-                {'type': 'safety-filter', 'name': 'Safety Filter', 'icon': 'fa-filter'},
-                {'type': 'constitutional-ai', 'name': 'Constitutional AI', 'icon': 'fa-gavel'}
-            ]
-        },
-        {
-            'category': 'Data Processing',
-            'nodes': [
-                {'type': 'data-preprocessor', 'name': 'Preprocessor', 'icon': 'fa-filter'},
-                {'type': 'data-transformer', 'name': 'Transformer', 'icon': 'fa-exchange-alt'},
-                {'type': 'data-validator', 'name': 'Validator', 'icon': 'fa-check'},
-                {'type': 'data-splitter', 'name': 'Data Splitter', 'icon': 'fa-cut'}
-            ]
-        },
-        {
-            'category': 'Control Flow',
-            'nodes': [
-                {'type': 'condition', 'name': 'Condition', 'icon': 'fa-question-circle'},
-                {'type': 'loop', 'name': 'Loop', 'icon': 'fa-redo'},
-                {'type': 'parallel', 'name': 'Parallel', 'icon': 'fa-code-branch'},
-                {'type': 'merge', 'name': 'Merge', 'icon': 'fa-code-merge'}
-            ]
-        }
-    ]
-    
-    return render_template('orchestration/create.html', 
-                         user=user,
-                         node_types=node_types)
-
-@orchestration_bp.route('/workflow/<int:workflow_id>')
-@login_required
-def edit_workflow(workflow_id):
-    user = get_current_user()
-    
-    # Simulate workflow data
-    workflow = {
-        'id': workflow_id,
-        'name': 'AI Model Training Pipeline',
-        'description': 'Complete pipeline for training custom AI models',
-        'workflow_data': {
-            'nodes': [
-                {
-                    'id': 1,
-                    'type': 'input',
-                    'name': 'Training Data',
-                    'pos_x': 100,
-                    'pos_y': 100,
-                    'data': {'dataset': 'training_data.csv'}
-                },
-                {
-                    'id': 2,
-                    'type': 'data-preprocessor',
-                    'name': 'Data Preprocessing',
-                    'pos_x': 300,
-                    'pos_y': 100,
-                    'data': {'normalize': True, 'split_ratio': 0.8}
-                },
-                {
-                    'id': 3,
-                    'type': 'openai-model',
-                    'name': 'Model Training',
-                    'pos_x': 500,
-                    'pos_y': 100,
-                    'data': {'model': 'gpt-4o', 'epochs': 10}
-                },
-                {
-                    'id': 4,
-                    'type': 'output',
-                    'name': 'Trained Model',
-                    'pos_x': 700,
-                    'pos_y': 100,
-                    'data': {'format': 'pkl'}
-                }
-            ],
-            'connections': [
-                {'from': 1, 'to': 2},
-                {'from': 2, 'to': 3},
-                {'from': 3, 'to': 4}
-            ]
-        }
-    }
-    
-    return render_template('orchestration/edit.html', 
-                         user=user,
-                         workflow=workflow)
-
-@orchestration_bp.route('/workflow/<int:workflow_id>/execute', methods=['POST'])
-@login_required
-def execute_workflow(workflow_id):
-    user = get_current_user()
     data = request.get_json()
     
-    execution_params = data.get('execution_params', {})
+    name = data.get('name', '').strip()
+    flow_definition = data.get('flow_definition', {})
+    
+    if not name:
+        return jsonify({'error': 'Workflow name is required'}), 400
+    
+    if not flow_definition:
+        return jsonify({'error': 'Workflow definition is required'}), 400
     
     try:
-        # In a real implementation, this would execute the workflow
-        execution_id = 456  # Placeholder
+        orchestration_service = OrchestrationService()
         
-        logging.info(f"Workflow {workflow_id} executed by user {user.id}")
+        # Validate workflow definition
+        validation_result = orchestration_service.validate_workflow(flow_definition)
+        
+        if not validation_result.get('valid'):
+            return jsonify({
+                'error': 'Invalid workflow definition',
+                'details': validation_result.get('errors', [])
+            }), 400
+        
+        workflow_id = str(uuid.uuid4())
+        workflow = Workflow(
+            id=workflow_id,
+            user_id=current_user.id,
+            name=name,
+            description=data.get('description', ''),
+            flow_definition=flow_definition,
+            is_active=True
+        )
+        
+        db.session.add(workflow)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'workflow_id': workflow_id,
+            'validation': validation_result
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@orchestration_bp.route('/workflow/<workflow_id>/update', methods=['POST'])
+@login_required
+def update_workflow(workflow_id):
+    workflow = Workflow.query.filter_by(
+        id=workflow_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    data = request.get_json()
+    
+    try:
+        orchestration_service = OrchestrationService()
+        
+        # Update workflow
+        if 'name' in data:
+            workflow.name = data['name']
+        if 'description' in data:
+            workflow.description = data['description']
+        if 'flow_definition' in data:
+            # Validate new definition
+            validation_result = orchestration_service.validate_workflow(data['flow_definition'])
+            if not validation_result.get('valid'):
+                return jsonify({
+                    'error': 'Invalid workflow definition',
+                    'details': validation_result.get('errors', [])
+                }), 400
+            workflow.flow_definition = data['flow_definition']
+        
+        db.session.commit()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@orchestration_bp.route('/workflow/<workflow_id>/execute', methods=['POST'])
+@login_required
+def execute_workflow(workflow_id):
+    workflow = Workflow.query.filter_by(
+        id=workflow_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    data = request.get_json()
+    input_data = data.get('input_data', {})
+    
+    try:
+        orchestration_service = OrchestrationService()
+        
+        execution_id = str(uuid.uuid4())
+        execution = WorkflowExecution(
+            id=execution_id,
+            workflow_id=workflow_id,
+            status='running',
+            input_data=input_data,
+            start_time=db.func.now()
+        )
+        
+        db.session.add(execution)
+        db.session.commit()
+        
+        # Execute workflow asynchronously
+        execution_result = orchestration_service.execute_workflow_async(
+            workflow=workflow,
+            execution=execution,
+            input_data=input_data
+        )
+        
+        # Update workflow execution count
+        workflow.execution_count += 1
+        workflow.last_execution = db.func.now()
+        db.session.commit()
+        
         return jsonify({
             'success': True,
             'execution_id': execution_id,
             'status': 'running',
-            'message': 'Workflow execution started',
-            'estimated_duration': '15 minutes'
+            'result': execution_result
         })
-    
+        
     except Exception as e:
-        logging.error(f"Error executing workflow: {str(e)}")
-        return jsonify({'error': 'Failed to execute workflow'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@orchestration_bp.route('/executions')
+@orchestration_bp.route('/execution/<execution_id>')
 @login_required
-def execution_history():
-    user = get_current_user()
+def view_execution(execution_id):
+    execution = WorkflowExecution.query.join(Workflow).filter(
+        WorkflowExecution.id == execution_id,
+        Workflow.user_id == current_user.id
+    ).first_or_404()
     
-    # Simulate execution history
-    executions = [
-        {
-            'id': 1,
-            'workflow_id': 1,
-            'workflow_name': 'AI Model Training Pipeline',
-            'status': 'completed',
-            'start_time': datetime.utcnow().isoformat(),
-            'end_time': datetime.utcnow().isoformat(),
-            'duration': '12m 34s',
+    return render_template('orchestration/execution_detail.html', execution=execution)
+
+@orchestration_bp.route('/execution/<execution_id>/status')
+@login_required
+def execution_status(execution_id):
+    execution = WorkflowExecution.query.join(Workflow).filter(
+        WorkflowExecution.id == execution_id,
+        Workflow.user_id == current_user.id
+    ).first_or_404()
+    
+    return jsonify({
+        'execution_id': execution_id,
+        'status': execution.status,
+        'start_time': execution.start_time.isoformat() if execution.start_time else None,
+        'end_time': execution.end_time.isoformat() if execution.end_time else None,
+        'output_data': execution.output_data,
+        'execution_log': execution.execution_log
+    })
+
+@orchestration_bp.route('/execution/<execution_id>/stop', methods=['POST'])
+@login_required
+def stop_execution(execution_id):
+    execution = WorkflowExecution.query.join(Workflow).filter(
+        WorkflowExecution.id == execution_id,
+        Workflow.user_id == current_user.id
+    ).first_or_404()
+    
+    try:
+        orchestration_service = OrchestrationService()
+        
+        # Stop workflow execution
+        stop_result = orchestration_service.stop_workflow_execution(execution)
+        
+        execution.status = 'stopped'
+        execution.end_time = db.func.now()
+        db.session.commit()
+        
+        return jsonify({
             'success': True,
-            'error_message': None
-        },
-        {
-            'id': 2,
-            'workflow_id': 3,
-            'workflow_name': 'Federated Learning Orchestration',
-            'status': 'running',
-            'start_time': datetime.utcnow().isoformat(),
-            'end_time': None,
-            'duration': '8m 15s',
-            'success': None,
-            'error_message': None
-        },
-        {
-            'id': 3,
-            'workflow_id': 2,
-            'workflow_name': 'Quantum-Classical Hybrid Workflow',
-            'status': 'failed',
-            'start_time': datetime.utcnow().isoformat(),
-            'end_time': datetime.utcnow().isoformat(),
-            'duration': '3m 45s',
-            'success': False,
-            'error_message': 'Quantum backend unavailable'
-        }
-    ]
-    
-    return render_template('orchestration/executions.html', 
-                         user=user,
-                         executions=executions)
+            'result': stop_result
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @orchestration_bp.route('/templates')
 @login_required
 def workflow_templates():
-    user = get_current_user()
-    
-    # Predefined workflow templates
-    templates = [
-        {
-            'id': 1,
-            'name': 'Basic Chat AI Pipeline',
-            'description': 'Simple conversational AI workflow',
-            'category': 'AI Models',
-            'difficulty': 'Beginner',
-            'nodes': 4,
-            'preview_image': '/static/images/templates/chat-pipeline.svg'
-        },
-        {
-            'id': 2,
-            'name': 'RAG Knowledge System',
-            'description': 'Retrieval-augmented generation workflow',
-            'category': 'Knowledge',
-            'difficulty': 'Intermediate',
-            'nodes': 8,
-            'preview_image': '/static/images/templates/rag-system.svg'
-        },
-        {
-            'id': 3,
-            'name': 'Quantum Optimization',
-            'description': 'Quantum-enhanced optimization pipeline',
-            'category': 'Quantum',
-            'difficulty': 'Advanced',
-            'nodes': 12,
-            'preview_image': '/static/images/templates/quantum-opt.svg'
-        },
-        {
-            'id': 4,
-            'name': 'Federated Learning Network',
-            'description': 'Multi-party federated learning setup',
-            'category': 'Federated',
-            'difficulty': 'Expert',
-            'nodes': 15,
-            'preview_image': '/static/images/templates/federated-net.svg'
-        },
-        {
-            'id': 5,
-            'name': 'Neuromorphic Edge AI',
-            'description': 'Edge deployment with neuromorphic optimization',
-            'category': 'Neuromorphic',
-            'difficulty': 'Expert',
-            'nodes': 10,
-            'preview_image': '/static/images/templates/neuro-edge.svg'
-        },
-        {
-            'id': 6,
-            'name': 'AI Safety Pipeline',
-            'description': 'Comprehensive AI safety and alignment workflow',
-            'category': 'Safety',
-            'difficulty': 'Advanced',
-            'nodes': 14,
-            'preview_image': '/static/images/templates/safety-pipeline.svg'
-        }
-    ]
-    
-    return render_template('orchestration/templates.html', 
-                         user=user,
-                         templates=templates)
-
-@orchestration_bp.route('/monitoring')
-@login_required
-def workflow_monitoring():
-    user = get_current_user()
-    
-    # Real-time monitoring data
-    monitoring_data = {
-        'active_workflows': 3,
-        'total_executions_today': 15,
-        'success_rate': 94.2,
-        'average_execution_time': '8m 32s',
-        'resource_usage': {
-            'cpu': 67,
-            'memory': 45,
-            'gpu': 23,
-            'quantum_qpu': 12
-        },
-        'recent_alerts': [
-            {
-                'level': 'warning',
-                'message': 'High memory usage detected in workflow #3',
-                'timestamp': datetime.utcnow().isoformat()
-            },
-            {
-                'level': 'info',
-                'message': 'Quantum backend connection restored',
-                'timestamp': datetime.utcnow().isoformat()
+    templates = {
+        'data_processing': {
+            'name': 'Data Processing Pipeline',
+            'description': 'Process and transform data through multiple stages',
+            'nodes': ['data_input', 'data_cleaner', 'transformer', 'output'],
+            'flow_definition': {
+                'drawflow': {
+                    'Home': {
+                        'data': {
+                            '1': {
+                                'name': 'data_input',
+                                'data': {},
+                                'class': 'data_input',
+                                'html': 'Data Input',
+                                'typenode': 'vue',
+                                'inputs': {},
+                                'outputs': {'output_1': {'connections': [{'node': '2', 'output': 'input_1'}]}},
+                                'pos_x': 100,
+                                'pos_y': 100
+                            },
+                            '2': {
+                                'name': 'data_cleaner',
+                                'data': {},
+                                'class': 'data_cleaner',
+                                'html': 'Data Cleaner',
+                                'typenode': 'vue',
+                                'inputs': {'input_1': {'connections': [{'node': '1', 'input': 'output_1'}]}},
+                                'outputs': {'output_1': {'connections': [{'node': '3', 'output': 'input_1'}]}},
+                                'pos_x': 300,
+                                'pos_y': 100
+                            }
+                        }
+                    }
+                }
             }
+        },
+        'ai_model_chain': {
+            'name': 'AI Model Chain',
+            'description': 'Chain multiple AI models for complex processing',
+            'nodes': ['input', 'gpt4', 'claude', 'output'],
+            'flow_definition': {
+                # Simplified template structure
+                'type': 'ai_chain',
+                'models': ['gpt-4o', 'claude-sonnet-4-20250514']
+            }
+        },
+        'quantum_classical_hybrid': {
+            'name': 'Quantum-Classical Hybrid',
+            'description': 'Combine quantum and classical computing',
+            'nodes': ['classical_input', 'quantum_processor', 'classical_output'],
+            'flow_definition': {
+                'type': 'hybrid',
+                'quantum_backend': 'ibm',
+                'classical_backend': 'cpu'
+            }
+        }
+    }
+    
+    return jsonify({
+        'success': True,
+        'templates': templates
+    })
+
+@orchestration_bp.route('/nodes/available')
+@login_required
+def available_nodes():
+    nodes = {
+        'input_nodes': [
+            {'type': 'text_input', 'name': 'Text Input', 'description': 'Text input node'},
+            {'type': 'file_input', 'name': 'File Input', 'description': 'File input node'},
+            {'type': 'api_input', 'name': 'API Input', 'description': 'API data input'}
+        ],
+        'processing_nodes': [
+            {'type': 'gpt4', 'name': 'GPT-4o', 'description': 'OpenAI GPT-4o model'},
+            {'type': 'claude', 'name': 'Claude Sonnet 4', 'description': 'Anthropic Claude Sonnet 4'},
+            {'type': 'gemini', 'name': 'Gemini Pro', 'description': 'Google Gemini Pro'},
+            {'type': 'data_transformer', 'name': 'Data Transformer', 'description': 'Transform data format'},
+            {'type': 'text_analyzer', 'name': 'Text Analyzer', 'description': 'Analyze text content'}
+        ],
+        'quantum_nodes': [
+            {'type': 'quantum_circuit', 'name': 'Quantum Circuit', 'description': 'Quantum computation node'},
+            {'type': 'quantum_simulator', 'name': 'Quantum Simulator', 'description': 'Simulate quantum circuits'},
+            {'type': 'hybrid_processor', 'name': 'Hybrid Processor', 'description': 'Quantum-classical hybrid'}
+        ],
+        'output_nodes': [
+            {'type': 'text_output', 'name': 'Text Output', 'description': 'Text output node'},
+            {'type': 'file_output', 'name': 'File Output', 'description': 'File output node'},
+            {'type': 'api_output', 'name': 'API Output', 'description': 'Send to API endpoint'}
         ]
     }
     
-    return render_template('orchestration/monitoring.html', 
-                         user=user,
-                         monitoring_data=monitoring_data)
+    return jsonify({
+        'success': True,
+        'nodes': nodes
+    })
 
+@orchestration_bp.route('/workflow/<workflow_id>/clone', methods=['POST'])
+@login_required
+def clone_workflow(workflow_id):
+    original_workflow = Workflow.query.filter_by(
+        id=workflow_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    try:
+        new_workflow_id = str(uuid.uuid4())
+        cloned_workflow = Workflow(
+            id=new_workflow_id,
+            user_id=current_user.id,
+            name=f"{original_workflow.name} (Copy)",
+            description=original_workflow.description,
+            flow_definition=original_workflow.flow_definition,
+            is_active=True
+        )
+        
+        db.session.add(cloned_workflow)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'workflow_id': new_workflow_id
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

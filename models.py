@@ -1,298 +1,365 @@
 from datetime import datetime
-from app import db
+from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
-import json
+from sqlalchemy import Text, JSON, Boolean, Integer, String, DateTime, Float, ForeignKey
+from sqlalchemy.orm import relationship
+from app import db
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    first_name = db.Column(db.String(50))
-    last_name = db.Column(db.String(50))
-    profile_image_url = db.Column(db.String(255))
-    is_active = db.Column(db.Boolean, default=True)
-    is_admin = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    email = db.Column(String(255), unique=True, nullable=False)
+    username = db.Column(String(100), unique=True, nullable=False)
+    password_hash = db.Column(String(256))
+    first_name = db.Column(String(100))
+    last_name = db.Column(String(100))
+    profile_image_url = db.Column(Text)
+    is_active = db.Column(Boolean, default=True)
+    role = db.Column(String(50), default='user')
+    preferences = db.Column(JSON, default=dict)
+    api_keys = db.Column(Text)  # Encrypted JSON
+    subscription_tier = db.Column(String(50), default='free')
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    updated_at = db.Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    chat_sessions = db.relationship('ChatSession', backref='user', lazy=True)
-    files = db.relationship('File', backref='user', lazy=True)
-    knowledge_bases = db.relationship('KnowledgeBase', backref='user', lazy=True)
-    
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+    chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
+    files = relationship("File", back_populates="user", cascade="all, delete-orphan")
+    knowledge_bases = relationship("KnowledgeBase", back_populates="user", cascade="all, delete-orphan")
+    research_projects = relationship("ResearchProject", back_populates="user", cascade="all, delete-orphan")
 
 class ChatSession(db.Model):
     __tablename__ = 'chat_sessions'
     
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    title = db.Column(db.String(255), nullable=False)
-    model_provider = db.Column(db.String(50), default='openai')
-    model_name = db.Column(db.String(100), default='gpt-4o')
-    system_prompt = db.Column(db.Text)
-    temperature = db.Column(db.Float, default=0.7)
-    max_tokens = db.Column(db.Integer, default=2000)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    title = db.Column(String(255), nullable=False)
+    model_provider = db.Column(String(100))
+    model_name = db.Column(String(100))
+    system_prompt = db.Column(Text)
+    settings = db.Column(JSON, default=dict)
+    is_active = db.Column(Boolean, default=True)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    updated_at = db.Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    messages = db.relationship('ChatMessage', backref='session', lazy=True, cascade='all, delete-orphan')
+    user = relationship("User", back_populates="chat_sessions")
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
 
 class ChatMessage(db.Model):
     __tablename__ = 'chat_messages'
     
-    id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'user', 'assistant', 'system'
-    content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    metadata = db.Column(db.Text)  # JSON string for additional data
+    id = db.Column(String(255), primary_key=True)
+    session_id = db.Column(String(255), ForeignKey('chat_sessions.id'), nullable=False)
+    role = db.Column(String(20), nullable=False)  # user, assistant, system
+    content = db.Column(Text, nullable=False)
+    metadata = db.Column(JSON, default=dict)
+    tokens_used = db.Column(Integer, default=0)
+    cost = db.Column(Float, default=0.0)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
     
-    def set_metadata(self, data):
-        self.metadata = json.dumps(data)
-    
-    def get_metadata(self):
-        return json.loads(self.metadata) if self.metadata else {}
+    # Relationships
+    session = relationship("ChatSession", back_populates="messages")
 
 class File(db.Model):
     __tablename__ = 'files'
     
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    filename = db.Column(db.String(255), nullable=False)
-    original_filename = db.Column(db.String(255), nullable=False)
-    file_path = db.Column(db.String(500), nullable=False)
-    file_size = db.Column(db.Integer, nullable=False)
-    file_type = db.Column(db.String(100), nullable=False)
-    mime_type = db.Column(db.String(100))
-    is_processed = db.Column(db.Boolean, default=False)
-    processing_status = db.Column(db.String(50), default='pending')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    filename = db.Column(String(255), nullable=False)
+    original_filename = db.Column(String(255), nullable=False)
+    file_type = db.Column(String(100), nullable=False)
+    file_size = db.Column(Integer, nullable=False)
+    mime_type = db.Column(String(100))
+    storage_path = db.Column(Text, nullable=False)
+    is_processed = db.Column(Boolean, default=False)
+    processing_status = db.Column(String(50), default='pending')
+    metadata = db.Column(JSON, default=dict)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    knowledge_base_files = db.relationship('KnowledgeBaseFile', backref='file', lazy=True)
-    chunks = db.relationship('FileChunk', backref='file', lazy=True, cascade='all, delete-orphan')
+    user = relationship("User", back_populates="files")
+    embeddings = relationship("FileEmbedding", back_populates="file", cascade="all, delete-orphan")
 
 class KnowledgeBase(db.Model):
     __tablename__ = 'knowledge_bases'
     
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    name = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    embedding_model = db.Column(db.String(100), default='text-embedding-3-small')
-    chunk_size = db.Column(db.Integer, default=1000)
-    chunk_overlap = db.Column(db.Integer, default=200)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    name = db.Column(String(255), nullable=False)
+    description = db.Column(Text)
+    settings = db.Column(JSON, default=dict)
+    file_count = db.Column(Integer, default=0)
+    total_chunks = db.Column(Integer, default=0)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    updated_at = db.Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    files = db.relationship('KnowledgeBaseFile', backref='knowledge_base', lazy=True)
+    user = relationship("User", back_populates="knowledge_bases")
+    embeddings = relationship("FileEmbedding", back_populates="knowledge_base", cascade="all, delete-orphan")
 
-class KnowledgeBaseFile(db.Model):
-    __tablename__ = 'knowledge_base_files'
+class FileEmbedding(db.Model):
+    __tablename__ = 'file_embeddings'
     
-    id = db.Column(db.Integer, primary_key=True)
-    knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_bases.id'), nullable=False)
-    file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=False)
-    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    file_id = db.Column(String(255), ForeignKey('files.id'), nullable=False)
+    knowledge_base_id = db.Column(String(255), ForeignKey('knowledge_bases.id'))
+    chunk_text = db.Column(Text, nullable=False)
+    chunk_index = db.Column(Integer, nullable=False)
+    embedding_model = db.Column(String(100), nullable=False)
+    embedding_vector = db.Column(db.ARRAY(Float))  # pgvector
+    metadata = db.Column(JSON, default=dict)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    file = relationship("File", back_populates="embeddings")
+    knowledge_base = relationship("KnowledgeBase", back_populates="embeddings")
 
-class FileChunk(db.Model):
-    __tablename__ = 'file_chunks'
+class AIModel(db.Model):
+    __tablename__ = 'ai_models'
     
-    id = db.Column(db.Integer, primary_key=True)
-    file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=False)
-    chunk_index = db.Column(db.Integer, nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    embedding = db.Column(db.LargeBinary)  # Store embedding as binary data
-    metadata = db.Column(db.Text)  # JSON string for additional data
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    def set_metadata(self, data):
-        self.metadata = json.dumps(data)
-    
-    def get_metadata(self):
-        return json.loads(self.metadata) if self.metadata else {}
-
-class Assistant(db.Model):
-    __tablename__ = 'assistants'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    avatar_url = db.Column(db.String(500))
-    system_prompt = db.Column(db.Text)
-    model_provider = db.Column(db.String(50), default='openai')
-    model_name = db.Column(db.String(100), default='gpt-4o')
-    temperature = db.Column(db.Float, default=0.7)
-    max_tokens = db.Column(db.Integer, default=2000)
-    category = db.Column(db.String(100))
-    tags = db.Column(db.Text)  # JSON array of tags
-    downloads = db.Column(db.Integer, default=0)
-    rating = db.Column(db.Float, default=0.0)
-    created_by = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    name = db.Column(String(255), nullable=False)
+    provider = db.Column(String(100), nullable=False)
+    model_type = db.Column(String(100), nullable=False)  # chat, image, embedding
+    capabilities = db.Column(JSON, default=list)  # vision, function_calling, etc.
+    max_tokens = db.Column(Integer)
+    cost_per_token_input = db.Column(Float)
+    cost_per_token_output = db.Column(Float)
+    is_active = db.Column(Boolean, default=True)
+    settings = db.Column(JSON, default=dict)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
 
 class Plugin(db.Model):
     __tablename__ = 'plugins'
     
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    avatar_url = db.Column(db.String(500))
-    repository_url = db.Column(db.String(500))
-    package_manager = db.Column(db.String(50))  # 'npm', 'python', etc.
-    install_command = db.Column(db.String(500))
-    category = db.Column(db.String(100))
-    service_type = db.Column(db.String(50))  # 'Local Service', 'Hybrid Service', etc.
-    tools_count = db.Column(db.Integer, default=0)
-    schema_count = db.Column(db.Integer, default=0)
-    downloads = db.Column(db.Integer, default=0)
-    rating = db.Column(db.String(10), default='A')  # A, B, C rating
-    created_by = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    name = db.Column(String(255), nullable=False)
+    description = db.Column(Text)
+    category = db.Column(String(100))
+    version = db.Column(String(50))
+    author = db.Column(String(255))
+    github_url = db.Column(Text)
+    npm_package = db.Column(String(255))
+    installation_type = db.Column(String(50))  # npm, python, local
+    is_featured = db.Column(Boolean, default=False)
+    download_count = db.Column(Integer, default=0)
+    rating = db.Column(Float, default=0.0)
+    settings_schema = db.Column(JSON, default=dict)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
 
-class ModelProvider(db.Model):
-    __tablename__ = 'model_providers'
+class Assistant(db.Model):
+    __tablename__ = 'assistants'
     
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    display_name = db.Column(db.String(255))
-    description = db.Column(db.Text)
-    logo_url = db.Column(db.String(500))
-    base_url = db.Column(db.String(500))
-    api_key_required = db.Column(db.Boolean, default=True)
-    supported_models = db.Column(db.Text)  # JSON array of models
-    capabilities = db.Column(db.Text)  # JSON array of capabilities
-    pricing_info = db.Column(db.Text)  # JSON object with pricing details
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    name = db.Column(String(255), nullable=False)
+    description = db.Column(Text)
+    category = db.Column(String(100))
+    author = db.Column(String(255))
+    github_url = db.Column(Text)
+    system_prompt = db.Column(Text)
+    model_config = db.Column(JSON, default=dict)
+    capabilities = db.Column(JSON, default=list)
+    is_featured = db.Column(Boolean, default=False)
+    usage_count = db.Column(Integer, default=0)
+    rating = db.Column(Float, default=0.0)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
 
-class UserSettings(db.Model):
-    __tablename__ = 'user_settings'
+# Quantum Computing Models
+class QuantumCircuit(db.Model):
+    __tablename__ = 'quantum_circuits'
     
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    setting_key = db.Column(db.String(255), nullable=False)
-    setting_value = db.Column(db.Text)
-    is_encrypted = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    name = db.Column(String(255), nullable=False)
+    description = db.Column(Text)
+    circuit_data = db.Column(JSON, nullable=False)  # Qiskit/Cirq circuit definition
+    provider = db.Column(String(100))  # ibm, google, amazon
+    num_qubits = db.Column(Integer, nullable=False)
+    depth = db.Column(Integer)
+    gates_count = db.Column(Integer)
+    execution_results = db.Column(JSON, default=dict)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+
+# Federated Learning Models
+class FederatedNode(db.Model):
+    __tablename__ = 'federated_nodes'
     
-    __table_args__ = (db.UniqueConstraint('user_id', 'setting_key'),)
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    name = db.Column(String(255), nullable=False)
+    node_type = db.Column(String(100))  # coordinator, participant
+    status = db.Column(String(50), default='inactive')
+    endpoint_url = db.Column(Text)
+    capabilities = db.Column(JSON, default=dict)
+    last_seen = db.Column(DateTime)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+
+class FederatedTrainingJob(db.Model):
+    __tablename__ = 'federated_training_jobs'
+    
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    name = db.Column(String(255), nullable=False)
+    model_architecture = db.Column(JSON, nullable=False)
+    training_config = db.Column(JSON, nullable=False)
+    participating_nodes = db.Column(JSON, default=list)
+    status = db.Column(String(50), default='pending')
+    current_round = db.Column(Integer, default=0)
+    total_rounds = db.Column(Integer, nullable=False)
+    aggregation_results = db.Column(JSON, default=dict)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+
+# Neuromorphic Computing Models
+class NeuromorphicDevice(db.Model):
+    __tablename__ = 'neuromorphic_devices'
+    
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    name = db.Column(String(255), nullable=False)
+    device_type = db.Column(String(100))  # loihi, truenorth, spinnaker
+    location = db.Column(String(255))
+    capabilities = db.Column(JSON, default=dict)
+    status = db.Column(String(50), default='offline')
+    last_heartbeat = db.Column(DateTime)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+
+class SpikingNeuralNetwork(db.Model):
+    __tablename__ = 'spiking_neural_networks'
+    
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    name = db.Column(String(255), nullable=False)
+    architecture = db.Column(JSON, nullable=False)
+    neuron_model = db.Column(String(100))  # lif, izhikevich, hodgkin_huxley
+    network_size = db.Column(Integer)
+    deployment_target = db.Column(String(255))
+    performance_metrics = db.Column(JSON, default=dict)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+
+# AI Safety Models
+class SafetyProtocol(db.Model):
+    __tablename__ = 'safety_protocols'
+    
+    id = db.Column(String(255), primary_key=True)
+    name = db.Column(String(255), nullable=False)
+    description = db.Column(Text)
+    protocol_type = db.Column(String(100))  # alignment, robustness, interpretability
+    implementation = db.Column(JSON, nullable=False)
+    severity_level = db.Column(String(50))  # low, medium, high, critical
+    is_active = db.Column(Boolean, default=True)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+
+class SafetyViolation(db.Model):
+    __tablename__ = 'safety_violations'
+    
+    id = db.Column(String(255), primary_key=True)
+    protocol_id = db.Column(String(255), ForeignKey('safety_protocols.id'), nullable=False)
+    user_id = db.Column(String(255), ForeignKey('users.id'))
+    session_id = db.Column(String(255), ForeignKey('chat_sessions.id'))
+    violation_type = db.Column(String(100), nullable=False)
+    severity = db.Column(String(50))
+    details = db.Column(JSON, nullable=False)
+    resolved = db.Column(Boolean, default=False)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+
+# Self-Improving AI Models
+class ResearchProject(db.Model):
+    __tablename__ = 'research_projects'
+    
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    name = db.Column(String(255), nullable=False)
+    description = db.Column(Text)
+    research_area = db.Column(String(100))
+    hypothesis = db.Column(Text)
+    methodology = db.Column(JSON, default=dict)
+    status = db.Column(String(50), default='active')
+    progress_percentage = db.Column(Float, default=0.0)
+    findings = db.Column(JSON, default=list)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="research_projects")
+    experiments = relationship("Experiment", back_populates="project", cascade="all, delete-orphan")
+
+class Experiment(db.Model):
+    __tablename__ = 'experiments'
+    
+    id = db.Column(String(255), primary_key=True)
+    project_id = db.Column(String(255), ForeignKey('research_projects.id'), nullable=False)
+    name = db.Column(String(255), nullable=False)
+    hypothesis = db.Column(Text)
+    experimental_design = db.Column(JSON, nullable=False)
+    parameters = db.Column(JSON, default=dict)
+    results = db.Column(JSON, default=dict)
+    status = db.Column(String(50), default='planned')
+    start_time = db.Column(DateTime)
+    end_time = db.Column(DateTime)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    project = relationship("ResearchProject", back_populates="experiments")
+
+# Blockchain Models
+class BlockchainWallet(db.Model):
+    __tablename__ = 'blockchain_wallets'
+    
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    wallet_address = db.Column(String(255), nullable=False)
+    wallet_type = db.Column(String(100))  # metamask, walletconnect
+    network = db.Column(String(100))  # ethereum, polygon, bsc
+    is_active = db.Column(Boolean, default=True)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+
+class SmartContract(db.Model):
+    __tablename__ = 'smart_contracts'
+    
+    id = db.Column(String(255), primary_key=True)
+    name = db.Column(String(255), nullable=False)
+    contract_address = db.Column(String(255), nullable=False)
+    network = db.Column(String(100), nullable=False)
+    abi = db.Column(JSON, nullable=False)
+    purpose = db.Column(String(255))
+    is_verified = db.Column(Boolean, default=False)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+
+# Analytics Models
+class UsageMetrics(db.Model):
+    __tablename__ = 'usage_metrics'
+    
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'))
+    metric_type = db.Column(String(100), nullable=False)
+    metric_name = db.Column(String(255), nullable=False)
+    value = db.Column(Float, nullable=False)
+    metadata = db.Column(JSON, default=dict)
+    timestamp = db.Column(DateTime, default=datetime.utcnow)
+
+# Workflow Orchestration Models
+class Workflow(db.Model):
+    __tablename__ = 'workflows'
+    
+    id = db.Column(String(255), primary_key=True)
+    user_id = db.Column(String(255), ForeignKey('users.id'), nullable=False)
+    name = db.Column(String(255), nullable=False)
+    description = db.Column(Text)
+    flow_definition = db.Column(JSON, nullable=False)  # Drawflow format
+    is_active = db.Column(Boolean, default=True)
+    execution_count = db.Column(Integer, default=0)
+    last_execution = db.Column(DateTime)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
 
 class WorkflowExecution(db.Model):
     __tablename__ = 'workflow_executions'
     
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    workflow_name = db.Column(db.String(255), nullable=False)
-    workflow_data = db.Column(db.Text)  # JSON string of workflow configuration
-    status = db.Column(db.String(50), default='pending')
-    result = db.Column(db.Text)
-    error_message = db.Column(db.Text)
-    started_at = db.Column(db.DateTime, default=datetime.utcnow)
-    completed_at = db.Column(db.DateTime)
-    
-    def set_workflow_data(self, data):
-        self.workflow_data = json.dumps(data)
-    
-    def get_workflow_data(self):
-        return json.loads(self.workflow_data) if self.workflow_data else {}
-
-class QuantumExperiment(db.Model):
-    __tablename__ = 'quantum_experiments'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    name = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    quantum_provider = db.Column(db.String(100))  # 'ibm', 'google', 'aws'
-    circuit_data = db.Column(db.Text)  # JSON string of quantum circuit
-    execution_results = db.Column(db.Text)  # JSON string of results
-    status = db.Column(db.String(50), default='pending')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class FederatedLearningNode(db.Model):
-    __tablename__ = 'federated_learning_nodes'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    node_name = db.Column(db.String(255), nullable=False)
-    node_type = db.Column(db.String(50))  # 'coordinator', 'participant'
-    status = db.Column(db.String(50), default='inactive')
-    endpoint_url = db.Column(db.String(500))
-    capabilities = db.Column(db.Text)  # JSON string of node capabilities
-    last_seen = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class NeuromorphicDevice(db.Model):
-    __tablename__ = 'neuromorphic_devices'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    device_name = db.Column(db.String(255), nullable=False)
-    device_type = db.Column(db.String(100))  # 'loihi', 'truenorth', 'spinnaker'
-    status = db.Column(db.String(50), default='offline')
-    configuration = db.Column(db.Text)  # JSON string of device config
-    performance_metrics = db.Column(db.Text)  # JSON string of metrics
-    last_active = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class SafetyAssessment(db.Model):
-    __tablename__ = 'safety_assessments'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    assessment_type = db.Column(db.String(100), nullable=False)
-    model_name = db.Column(db.String(255))
-    assessment_data = db.Column(db.Text)  # JSON string of assessment details
-    risk_score = db.Column(db.Float)
-    recommendations = db.Column(db.Text)
-    status = db.Column(db.String(50), default='pending')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class ResearchProject(db.Model):
-    __tablename__ = 'research_projects'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    project_name = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    research_domain = db.Column(db.String(100))
-    hypothesis = db.Column(db.Text)
-    methodology = db.Column(db.Text)
-    progress_status = db.Column(db.String(50), default='planning')
-    findings = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class BlockchainTransaction(db.Model):
-    __tablename__ = 'blockchain_transactions'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    transaction_hash = db.Column(db.String(255), unique=True, nullable=False)
-    transaction_type = db.Column(db.String(100))  # 'plugin_purchase', 'revenue_share', etc.
-    amount = db.Column(db.Numeric(precision=20, scale=8))
-    token_symbol = db.Column(db.String(10))
-    status = db.Column(db.String(50), default='pending')
-    metadata = db.Column(db.Text)  # JSON string for additional data
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = db.Column(String(255), primary_key=True)
+    workflow_id = db.Column(String(255), ForeignKey('workflows.id'), nullable=False)
+    status = db.Column(String(50), default='running')
+    input_data = db.Column(JSON, default=dict)
+    output_data = db.Column(JSON, default=dict)
+    execution_log = db.Column(JSON, default=list)
+    start_time = db.Column(DateTime, default=datetime.utcnow)
+    end_time = db.Column(DateTime)

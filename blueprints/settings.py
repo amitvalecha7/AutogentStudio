@@ -1,238 +1,445 @@
-from flask import Blueprint, render_template, request, jsonify, session, flash, redirect, url_for
-from app import db
-from models import User, APIKey
-from blueprints.auth import login_required, get_current_user
-from utils.encryption import encrypt_api_key, decrypt_api_key
-import logging
+from flask import Blueprint, render_template, request, jsonify, flash
+from flask_login import login_required, current_user
+from models import AIModel, User, db
+from utils.encryption import encrypt_api_keys, decrypt_api_keys
 import json
 
-settings_bp = Blueprint('settings', __name__)
+settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
 
 @settings_bp.route('/')
 @login_required
-def settings_index():
-    user = get_current_user()
-    api_keys = APIKey.query.filter_by(user_id=user.id, is_active=True).all()
-    
-    # Group API keys by provider
-    provider_keys = {}
-    for key in api_keys:
-        provider_keys[key.provider] = key
-    
-    return render_template('settings/settings.html', 
-                         user=user, 
-                         provider_keys=provider_keys)
+def index():
+    return render_template('settings/index.html', user=current_user)
 
-@settings_bp.route('/model')
+@settings_bp.route('/model', methods=['GET', 'POST'])
 @login_required
 def model_settings():
-    user = get_current_user()
-    api_keys = APIKey.query.filter_by(user_id=user.id, is_active=True).all()
-    
-    provider_keys = {}
-    for key in api_keys:
-        provider_keys[key.provider] = {
-            'id': key.id,
-            'provider': key.provider,
-            'created_at': key.created_at.isoformat()
-        }
-    
-    return render_template('settings/model.html', 
-                         user=user, 
-                         provider_keys=provider_keys)
-
-@settings_bp.route('/api-key', methods=['POST'])
-@login_required
-def save_api_key():
-    user = get_current_user()
-    data = request.get_json()
-    
-    provider = data.get('provider')
-    api_key = data.get('api_key')
-    
-    if not provider or not api_key:
-        return jsonify({'error': 'Provider and API key are required'}), 400
-    
-    # Validate provider
-    valid_providers = ['openai', 'anthropic', 'google', 'groq', 'deepseek', 'qwen']
-    if provider not in valid_providers:
-        return jsonify({'error': 'Invalid provider'}), 400
-    
-    try:
-        # Check if API key already exists for this provider
-        existing_key = APIKey.query.filter_by(
-            user_id=user.id, 
-            provider=provider, 
-            is_active=True
-        ).first()
+    if request.method == 'POST':
+        data = request.get_json()
         
-        encrypted_key = encrypt_api_key(api_key)
+        # Update API keys
+        api_keys = {}
+        if 'openai_api_key' in data:
+            api_keys['openai'] = data['openai_api_key']
+        if 'anthropic_api_key' in data:
+            api_keys['anthropic'] = data['anthropic_api_key']
+        if 'google_api_key' in data:
+            api_keys['google'] = data['google_api_key']
+        if 'cohere_api_key' in data:
+            api_keys['cohere'] = data['cohere_api_key']
         
-        if existing_key:
-            # Update existing key
-            existing_key.encrypted_key = encrypted_key
-        else:
-            # Create new key
-            new_key = APIKey(
-                user_id=user.id,
-                provider=provider,
-                encrypted_key=encrypted_key
-            )
-            db.session.add(new_key)
+        # Encrypt and store API keys
+        if api_keys:
+            encrypted_keys = encrypt_api_keys(api_keys)
+            current_user.api_keys = encrypted_keys
+        
+        # Update model preferences
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'default_model_provider': data.get('default_provider', 'openai'),
+            'default_chat_model': data.get('default_chat_model', 'gpt-4o'),
+            'default_image_model': data.get('default_image_model', 'dall-e-3'),
+            'temperature': data.get('temperature', 0.7),
+            'max_tokens': data.get('max_tokens', 2048),
+            'top_p': data.get('top_p', 1.0)
+        })
+        current_user.preferences = preferences
         
         db.session.commit()
         
-        logging.info(f"API key saved for provider {provider} by user {user.id}")
-        return jsonify({'success': True, 'message': f'{provider.title()} API key saved successfully'})
+        return jsonify({'success': True, 'message': 'Settings saved successfully'})
     
-    except Exception as e:
-        db.session.rollback()
-        logging.error(f"Error saving API key: {str(e)}")
-        return jsonify({'error': 'Failed to save API key'}), 500
-
-@settings_bp.route('/api-key/<int:key_id>', methods=['DELETE'])
-@login_required
-def delete_api_key(key_id):
-    user = get_current_user()
-    api_key = APIKey.query.filter_by(id=key_id, user_id=user.id).first()
+    # Get available models
+    available_models = AIModel.query.filter_by(is_active=True).all()
+    models_by_provider = {}
+    for model in available_models:
+        if model.provider not in models_by_provider:
+            models_by_provider[model.provider] = []
+        models_by_provider[model.provider].append(model)
     
-    if api_key:
+    # Decrypt API keys for display (masked)
+    api_keys = {}
+    if current_user.api_keys:
         try:
-            api_key.is_active = False
-            db.session.commit()
-            
-            logging.info(f"API key {key_id} deleted by user {user.id}")
-            return jsonify({'success': True, 'message': 'API key deleted successfully'})
-        
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Error deleting API key: {str(e)}")
-            return jsonify({'error': 'Failed to delete API key'}), 500
+            decrypted_keys = decrypt_api_keys(current_user.api_keys)
+            for provider, key in decrypted_keys.items():
+                if key:
+                    api_keys[provider] = key[:8] + '...' + key[-4:] if len(key) > 12 else '***'
+        except:
+            pass
     
-    return jsonify({'error': 'API key not found'}), 404
+    return render_template('settings/model.html',
+                         models_by_provider=models_by_provider,
+                         api_keys=api_keys,
+                         preferences=current_user.preferences or {})
 
-@settings_bp.route('/security')
+@settings_bp.route('/image', methods=['GET', 'POST'])
 @login_required
-def security_settings():
-    user = get_current_user()
-    return render_template('settings/security.html', user=user)
-
-@settings_bp.route('/quantum')
-@login_required
-def quantum_settings():
-    user = get_current_user()
-    return render_template('settings/quantum.html', user=user)
-
-@settings_bp.route('/federated')
-@login_required
-def federated_settings():
-    user = get_current_user()
-    return render_template('settings/federated.html', user=user)
-
-@settings_bp.route('/neuromorphic')
-@login_required
-def neuromorphic_settings():
-    user = get_current_user()
-    return render_template('settings/neuromorphic.html', user=user)
-
-@settings_bp.route('/safety')
-@login_required
-def safety_settings():
-    user = get_current_user()
-    return render_template('settings/safety.html', user=user)
-
-@settings_bp.route('/self-improving')
-@login_required
-def self_improving_settings():
-    user = get_current_user()
-    return render_template('settings/self_improving.html', user=user)
-
-@settings_bp.route('/profile', methods=['GET', 'POST'])
-@login_required
-def profile_settings():
-    user = get_current_user()
-    
+def image_settings():
     if request.method == 'POST':
         data = request.get_json()
         
-        try:
-            if 'first_name' in data:
-                user.first_name = data['first_name']
-            if 'last_name' in data:
-                user.last_name = data['last_name']
-            if 'profile_image_url' in data:
-                user.profile_image_url = data['profile_image_url']
-            
-            db.session.commit()
-            
-            logging.info(f"Profile updated for user {user.id}")
-            return jsonify({'success': True, 'message': 'Profile updated successfully'})
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'image_provider': data.get('image_provider', 'openai'),
+            'default_image_size': data.get('default_size', '1024x1024'),
+            'default_image_style': data.get('default_style', 'natural'),
+            'default_image_quality': data.get('default_quality', 'standard'),
+            'auto_enhance': data.get('auto_enhance', False)
+        })
+        current_user.preferences = preferences
         
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Error updating profile: {str(e)}")
-            return jsonify({'error': 'Failed to update profile'}), 500
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Image settings saved'})
     
-    return render_template('settings/profile.html', user=user)
+    return render_template('settings/image.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/database', methods=['GET', 'POST'])
+@login_required
+def database_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'vector_database': data.get('vector_database', 'pgvector'),
+            'embedding_model': data.get('embedding_model', 'text-embedding-3-small'),
+            'chunk_size': data.get('chunk_size', 1000),
+            'chunk_overlap': data.get('chunk_overlap', 200)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Database settings saved'})
+    
+    return render_template('settings/database.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/rag', methods=['GET', 'POST'])
+@login_required
+def rag_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'rag_enabled': data.get('rag_enabled', True),
+            'similarity_threshold': data.get('similarity_threshold', 0.7),
+            'max_chunks': data.get('max_chunks', 5),
+            'reranking_enabled': data.get('reranking_enabled', False),
+            'query_expansion': data.get('query_expansion', False),
+            'hybrid_search': data.get('hybrid_search', True)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'RAG settings saved'})
+    
+    return render_template('settings/rag.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/fine-tuning', methods=['GET', 'POST'])
+@login_required
+def fine_tuning_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'fine_tuning_enabled': data.get('fine_tuning_enabled', False),
+            'auto_fine_tune': data.get('auto_fine_tune', False),
+            'training_data_threshold': data.get('training_data_threshold', 1000)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Fine-tuning settings saved'})
+    
+    return render_template('settings/fine_tuning.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/security', methods=['GET', 'POST'])
+@login_required
+def security_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'two_factor_enabled': data.get('two_factor_enabled', False),
+            'session_timeout': data.get('session_timeout', 24),
+            'audit_logging': data.get('audit_logging', True),
+            'data_encryption': data.get('data_encryption', True)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Security settings saved'})
+    
+    return render_template('settings/security.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/blockchain', methods=['GET', 'POST'])
+@login_required
+def blockchain_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'blockchain_enabled': data.get('blockchain_enabled', False),
+            'preferred_network': data.get('preferred_network', 'ethereum'),
+            'wallet_address': data.get('wallet_address', ''),
+            'revenue_sharing': data.get('revenue_sharing', False)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Blockchain settings saved'})
+    
+    return render_template('settings/blockchain.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/orchestration', methods=['GET', 'POST'])
+@login_required
+def orchestration_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'drawflow_enabled': data.get('drawflow_enabled', True),
+            'auto_save_workflows': data.get('auto_save_workflows', True),
+            'parallel_execution': data.get('parallel_execution', True)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Orchestration settings saved'})
+    
+    return render_template('settings/orchestration.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/plandex', methods=['GET', 'POST'])
+@login_required
+def plandex_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'plandex_enabled': data.get('plandex_enabled', True),
+            'auto_code_review': data.get('auto_code_review', True),
+            'project_templates': data.get('project_templates', [])
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Plandex settings saved'})
+    
+    return render_template('settings/plandex.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/quantum', methods=['GET', 'POST'])
+@login_required
+def quantum_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'quantum_provider': data.get('quantum_provider', 'ibm'),
+            'quantum_api_key': data.get('quantum_api_key', ''),
+            'default_backend': data.get('default_backend', 'qasm_simulator')
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Quantum settings saved'})
+    
+    return render_template('settings/quantum.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/federated', methods=['GET', 'POST'])
+@login_required
+def federated_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'federated_enabled': data.get('federated_enabled', False),
+            'node_type': data.get('node_type', 'participant'),
+            'privacy_level': data.get('privacy_level', 'high')
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Federated learning settings saved'})
+    
+    return render_template('settings/federated.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/deployment', methods=['GET', 'POST'])
+@login_required
+def deployment_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'auto_deployment': data.get('auto_deployment', False),
+            'deployment_platform': data.get('deployment_platform', 'docker'),
+            'ci_cd_enabled': data.get('ci_cd_enabled', False)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Deployment settings saved'})
+    
+    return render_template('settings/deployment.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/neuromorphic', methods=['GET', 'POST'])
+@login_required
+def neuromorphic_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'neuromorphic_enabled': data.get('neuromorphic_enabled', False),
+            'hardware_platform': data.get('hardware_platform', 'loihi'),
+            'edge_deployment': data.get('edge_deployment', True)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Neuromorphic settings saved'})
+    
+    return render_template('settings/neuromorphic.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/safety', methods=['GET', 'POST'])
+@login_required
+def safety_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'safety_protocols_enabled': data.get('safety_protocols_enabled', True),
+            'alignment_monitoring': data.get('alignment_monitoring', True),
+            'bias_detection': data.get('bias_detection', True)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'AI safety settings saved'})
+    
+    return render_template('settings/safety.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/self-improving', methods=['GET', 'POST'])
+@login_required
+def self_improving_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'self_improvement_enabled': data.get('self_improvement_enabled', False),
+            'auto_research': data.get('auto_research', False),
+            'capability_enhancement': data.get('capability_enhancement', False)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Self-improving AI settings saved'})
+    
+    return render_template('settings/self_improving.html',
+                         preferences=current_user.preferences or {})
 
 @settings_bp.route('/preferences', methods=['GET', 'POST'])
 @login_required
-def preferences():
-    user = get_current_user()
-    
+def user_preferences():
     if request.method == 'POST':
         data = request.get_json()
         
-        # In a real application, you'd store user preferences
-        # For now, we'll just return success
-        return jsonify({'success': True, 'message': 'Preferences saved successfully'})
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'theme': data.get('theme', 'dark'),
+            'language': data.get('language', 'en'),
+            'timezone': data.get('timezone', 'UTC'),
+            'notifications': data.get('notifications', True)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Preferences saved'})
     
-    return render_template('settings/preferences.html', user=user)
+    return render_template('settings/preferences.html',
+                         preferences=current_user.preferences or {})
+
+@settings_bp.route('/voice', methods=['GET', 'POST'])
+@login_required
+def voice_settings():
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'voice_enabled': data.get('voice_enabled', False),
+            'tts_voice': data.get('tts_voice', 'alloy'),
+            'stt_language': data.get('stt_language', 'en'),
+            'auto_play': data.get('auto_play', False)
+        })
+        current_user.preferences = preferences
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Voice settings saved'})
+    
+    return render_template('settings/voice.html',
+                         preferences=current_user.preferences or {})
 
 @settings_bp.route('/about')
 def about():
     return render_template('settings/about.html')
 
-@settings_bp.route('/test-api-key', methods=['POST'])
+@settings_bp.route('/advanced', methods=['GET', 'POST'])
 @login_required
-def test_api_key():
-    user = get_current_user()
-    data = request.get_json()
-    
-    provider = data.get('provider')
-    
-    if not provider:
-        return jsonify({'error': 'Provider is required'}), 400
-    
-    api_key_record = APIKey.query.filter_by(
-        user_id=user.id,
-        provider=provider,
-        is_active=True
-    ).first()
-    
-    if not api_key_record:
-        return jsonify({'error': f'No {provider} API key found'}), 404
-    
-    try:
-        api_key = decrypt_api_key(api_key_record.encrypted_key)
+def advanced_settings():
+    if request.method == 'POST':
+        data = request.get_json()
         
-        # Test the API key with a simple request
-        if provider == 'openai':
-            from services.openai_service import OpenAIService
-            service = OpenAIService(api_key)
-            test_result = service.test_connection()
-        elif provider == 'anthropic':
-            from services.anthropic_service import AnthropicService
-            service = AnthropicService(api_key)
-            test_result = service.test_connection()
-        else:
-            return jsonify({'error': f'Testing not implemented for {provider}'}), 400
+        preferences = current_user.preferences or {}
+        preferences.update({
+            'debug_mode': data.get('debug_mode', False),
+            'experimental_features': data.get('experimental_features', False),
+            'telemetry': data.get('telemetry', True)
+        })
+        current_user.preferences = preferences
         
-        if test_result:
-            return jsonify({'success': True, 'message': f'{provider.title()} API key is valid'})
-        else:
-            return jsonify({'error': f'{provider.title()} API key test failed'}), 400
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Advanced settings saved'})
     
-    except Exception as e:
-        logging.error(f"Error testing API key: {str(e)}")
-        return jsonify({'error': f'Failed to test {provider} API key'}), 500
+    return render_template('settings/advanced.html',
+                         preferences=current_user.preferences or {})

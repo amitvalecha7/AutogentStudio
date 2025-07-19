@@ -1,176 +1,159 @@
 import os
-import logging
-import mimetypes
-from typing import List, Optional
+import uuid
+from werkzeug.utils import secure_filename
+from werkzeug.datastructures import FileStorage
 import PyPDF2
 import docx
-import json
-import csv
+import pandas as pd
+from sentence_transformers import SentenceTransformer
+import numpy as np
 
 class FileProcessor:
-    def __init__(self):
-        self.supported_types = {
-            'text/plain': self._process_text,
-            'application/pdf': self._process_pdf,
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': self._process_docx,
-            'application/json': self._process_json,
-            'text/csv': self._process_csv,
-            'application/vnd.ms-excel': self._process_csv,
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': self._process_csv
+    def __init__(self, upload_folder='uploads'):
+        self.upload_folder = upload_folder
+        self.allowed_extensions = {
+            'txt', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 
+            'csv', 'md', 'html', 'png', 'jpg', 'jpeg', 
+            'gif', 'mp3', 'wav', 'mp4', 'avi'
+        }
+        self.embedding_model = None
+        os.makedirs(upload_folder, exist_ok=True)
+    
+    def allowed_file(self, filename):
+        """Check if file extension is allowed"""
+        return '.' in filename and \
+               filename.rsplit('.', 1)[1].lower() in self.allowed_extensions
+    
+    def save_file(self, file: FileStorage) -> dict:
+        """Save uploaded file and return file info"""
+        if not file or file.filename == '':
+            raise ValueError("No file provided")
+        
+        if not self.allowed_file(file.filename):
+            raise ValueError("File type not allowed")
+        
+        # Generate unique filename
+        original_filename = secure_filename(file.filename)
+        file_extension = original_filename.rsplit('.', 1)[1].lower()
+        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        file_path = os.path.join(self.upload_folder, unique_filename)
+        
+        # Save file
+        file.save(file_path)
+        
+        # Get file info
+        file_size = os.path.getsize(file_path)
+        file_type = file_extension
+        
+        return {
+            'filename': unique_filename,
+            'original_filename': original_filename,
+            'file_path': file_path,
+            'file_size': file_size,
+            'file_type': file_type
         }
     
-    def extract_text(self, file_path: str, mime_type: str) -> Optional[str]:
-        """Extract text content from file"""
+    def extract_text(self, file_path: str, file_type: str) -> str:
+        """Extract text content from various file types"""
         try:
-            if mime_type in self.supported_types:
-                processor = self.supported_types[mime_type]
-                return processor(file_path)
+            if file_type == 'txt':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            
+            elif file_type == 'pdf':
+                text = ""
+                with open(file_path, 'rb') as f:
+                    pdf_reader = PyPDF2.PdfReader(f)
+                    for page in pdf_reader.pages:
+                        text += page.extract_text() + "\n"
+                return text
+            
+            elif file_type in ['doc', 'docx']:
+                doc = docx.Document(file_path)
+                text = ""
+                for paragraph in doc.paragraphs:
+                    text += paragraph.text + "\n"
+                return text
+            
+            elif file_type in ['xls', 'xlsx']:
+                df = pd.read_excel(file_path)
+                return df.to_string()
+            
+            elif file_type == 'csv':
+                df = pd.read_csv(file_path)
+                return df.to_string()
+            
             else:
-                logging.warning(f"Unsupported file type: {mime_type}")
-                return None
+                return f"Text extraction not supported for {file_type} files"
+                
         except Exception as e:
-            logging.error(f"Error extracting text from {file_path}: {str(e)}")
-            return None
+            return f"Error extracting text: {str(e)}"
     
-    def _process_text(self, file_path: str) -> str:
-        """Process plain text files"""
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
-            return file.read()
-    
-    def _process_pdf(self, file_path: str) -> str:
-        """Process PDF files"""
-        text = ""
-        try:
-            with open(file_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                for page in pdf_reader.pages:
-                    text += page.extract_text() + "\n"
-        except Exception as e:
-            logging.error(f"Error processing PDF: {str(e)}")
-            # Fallback: try to read as text
-            return self._process_text(file_path)
-        
-        return text
-    
-    def _process_docx(self, file_path: str) -> str:
-        """Process Word documents"""
-        try:
-            doc = docx.Document(file_path)
-            text = ""
-            for paragraph in doc.paragraphs:
-                text += paragraph.text + "\n"
-            return text
-        except Exception as e:
-            logging.error(f"Error processing DOCX: {str(e)}")
-            return ""
-    
-    def _process_json(self, file_path: str) -> str:
-        """Process JSON files"""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                data = json.load(file)
-                return json.dumps(data, indent=2)
-        except Exception as e:
-            logging.error(f"Error processing JSON: {str(e)}")
-            return self._process_text(file_path)
-    
-    def _process_csv(self, file_path: str) -> str:
-        """Process CSV files"""
-        try:
-            text = ""
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
-                csv_reader = csv.reader(file)
-                for row in csv_reader:
-                    text += " ".join(row) + "\n"
-            return text
-        except Exception as e:
-            logging.error(f"Error processing CSV: {str(e)}")
-            return self._process_text(file_path)
-    
-    def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-        """Split text into overlapping chunks"""
-        if not text:
-            return []
+    def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> list:
+        """Split text into overlapping chunks for better RAG performance"""
+        if len(text) <= chunk_size:
+            return [text]
         
         chunks = []
         start = 0
         
         while start < len(text):
-            end = start + chunk_size
-            chunk = text[start:end]
+            end = min(start + chunk_size, len(text))
             
-            # Try to break at sentence boundaries
+            # Try to end at a sentence boundary
             if end < len(text):
-                # Look for sentence endings
-                sentence_ends = ['.', '!', '?', '\n']
-                for i in range(len(chunk) - 1, max(0, len(chunk) - 100), -1):
-                    if chunk[i] in sentence_ends and i > len(chunk) * 0.5:
-                        chunk = chunk[:i + 1]
-                        end = start + i + 1
-                        break
+                last_period = text.rfind('.', start, end)
+                last_newline = text.rfind('\n', start, end)
+                boundary = max(last_period, last_newline)
+                
+                if boundary > start + chunk_size // 2:
+                    end = boundary + 1
             
-            chunks.append(chunk.strip())
-            start = end - overlap
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
             
-            if start >= len(text):
-                break
+            start = max(start + chunk_size - overlap, end)
         
-        return [chunk for chunk in chunks if chunk.strip()]
+        return chunks
     
-    def get_file_metadata(self, file_path: str) -> dict:
-        """Extract metadata from file"""
+    def generate_embeddings(self, chunks: list, model_name: str = 'all-MiniLM-L6-v2') -> np.ndarray:
+        """Generate embeddings for text chunks"""
         try:
-            stat = os.stat(file_path)
-            mime_type, _ = mimetypes.guess_type(file_path)
+            if self.embedding_model is None:
+                self.embedding_model = SentenceTransformer(model_name)
             
-            metadata = {
-                'size': stat.st_size,
-                'created': stat.st_ctime,
-                'modified': stat.st_mtime,
-                'mime_type': mime_type,
-                'extension': os.path.splitext(file_path)[1].lower()
+            embeddings = self.embedding_model.encode(chunks)
+            return embeddings
+        except Exception as e:
+            print(f"Error generating embeddings: {e}")
+            return np.array([])
+    
+    def process_file_for_rag(self, file_path: str, file_type: str) -> dict:
+        """Process file for RAG integration"""
+        try:
+            # Extract text
+            text = self.extract_text(file_path, file_type)
+            
+            if not text or text.startswith("Error"):
+                return {"error": text or "Failed to extract text"}
+            
+            # Chunk text
+            chunks = self.chunk_text(text)
+            
+            # Generate embeddings
+            embeddings = self.generate_embeddings(chunks)
+            
+            return {
+                "text": text,
+                "chunks": chunks,
+                "embeddings": embeddings.tolist() if embeddings.size > 0 else [],
+                "chunk_count": len(chunks),
+                "status": "success"
             }
             
-            # Add type-specific metadata
-            if mime_type == 'application/pdf':
-                metadata.update(self._get_pdf_metadata(file_path))
-            elif mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-                metadata.update(self._get_docx_metadata(file_path))
-            
-            return metadata
         except Exception as e:
-            logging.error(f"Error extracting metadata: {str(e)}")
-            return {}
-    
-    def _get_pdf_metadata(self, file_path: str) -> dict:
-        """Extract PDF-specific metadata"""
-        try:
-            with open(file_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                metadata = {
-                    'pages': len(pdf_reader.pages),
-                    'title': pdf_reader.metadata.get('/Title', '') if pdf_reader.metadata else '',
-                    'author': pdf_reader.metadata.get('/Author', '') if pdf_reader.metadata else '',
-                    'subject': pdf_reader.metadata.get('/Subject', '') if pdf_reader.metadata else ''
-                }
-                return metadata
-        except Exception as e:
-            logging.error(f"Error extracting PDF metadata: {str(e)}")
-            return {}
-    
-    def _get_docx_metadata(self, file_path: str) -> dict:
-        """Extract DOCX-specific metadata"""
-        try:
-            doc = docx.Document(file_path)
-            core_props = doc.core_properties
-            metadata = {
-                'title': core_props.title or '',
-                'author': core_props.author or '',
-                'subject': core_props.subject or '',
-                'paragraphs': len(doc.paragraphs),
-                'words': sum(len(p.text.split()) for p in doc.paragraphs)
-            }
-            return metadata
-        except Exception as e:
-            logging.error(f"Error extracting DOCX metadata: {str(e)}")
-            return {}
+            return {"error": f"Processing failed: {str(e)}"}
+
+# Global instance
+file_processor = FileProcessor()

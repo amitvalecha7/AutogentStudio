@@ -4,77 +4,127 @@ from anthropic import Anthropic
 
 class AnthropicService:
     def __init__(self):
-        api_key = os.environ.get('ANTHROPIC_API_KEY')
-        if not api_key:
-            logging.warning("Anthropic API key not found in environment variables")
-            self.client = None
-        else:
-            self.client = Anthropic(api_key=api_key)
-    
-    def chat_completion(self, message, model='claude-sonnet-4-20250514', max_tokens=2000):
-        """
-        Get chat completion from Anthropic Claude
-        # The newest Anthropic model is "claude-sonnet-4-20250514", not "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022" nor "claude-3-sonnet-20240229".
+        # The newest Anthropic model is "claude-sonnet-4-20250514", not "claude-3-7-sonnet-20250219", 
+        # "claude-3-5-sonnet-20241022" nor "claude-3-sonnet-20240229". 
         # If the user doesn't specify a model, always prefer using "claude-sonnet-4-20250514" as it is the latest model.
-        """
-        if not self.client:
-            raise Exception("Anthropic client not initialized - API key missing")
+        self.api_key = os.environ.get('ANTHROPIC_API_KEY')
+        if not self.api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable must be set")
         
-        try:
-            response = self.client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                messages=[
-                    {"role": "user", "content": message}
-                ]
-            )
-            
-            return {
-                'content': response.content[0].text,
-                'model': model,
-                'usage': {
-                    'input_tokens': response.usage.input_tokens,
-                    'output_tokens': response.usage.output_tokens
-                }
-            }
-        except Exception as e:
-            logging.error(f"Anthropic chat completion error: {str(e)}")
-            raise
+        self.client = Anthropic(api_key=self.api_key)
+        self.default_model = "claude-sonnet-4-20250514"
     
-    def analyze_image(self, image_data, prompt, model='claude-sonnet-4-20250514'):
-        """Analyze image with Claude"""
-        if not self.client:
-            raise Exception("Anthropic client not initialized - API key missing")
+    def generate_response(self, messages, model=None, temperature=0.7, max_tokens=2048):
+        """Generate a response using Anthropic's Claude API"""
+        if model is None:
+            model = self.default_model
         
         try:
+            # Convert messages format if needed
+            formatted_messages = []
+            system_message = None
+            
+            for message in messages:
+                if message['role'] == 'system':
+                    system_message = message['content']
+                else:
+                    formatted_messages.append({
+                        'role': message['role'],
+                        'content': message['content']
+                    })
+            
             response = self.client.messages.create(
                 model=model,
-                max_tokens=1000,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": image_data
-                                }
-                            },
-                            {
-                                "type": "text",
-                                "text": prompt
-                            }
-                        ]
-                    }
-                ]
+                messages=formatted_messages,
+                system=system_message,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            
+            return response.content[0].text
+            
+        except Exception as e:
+            logging.error(f"Anthropic API error: {str(e)}")
+            raise e
+    
+    def constitutional_ai_check(self, response, principles=None):
+        """Perform constitutional AI checking on a response"""
+        if principles is None:
+            principles = [
+                "Be helpful and harmless",
+                "Avoid bias and discrimination",
+                "Respect privacy and confidentiality",
+                "Be truthful and accurate"
+            ]
+        
+        try:
+            critique_prompt = f"""
+Please critique the following AI response according to these constitutional principles:
+{chr(10).join(f'- {p}' for p in principles)}
+
+Response to critique: {response}
+
+Provide a critique and suggest improvements if needed.
+"""
+            
+            critique_response = self.client.messages.create(
+                model=self.default_model,
+                messages=[{
+                    'role': 'user',
+                    'content': critique_prompt
+                }],
+                max_tokens=1000
             )
             
             return {
-                'content': response.content[0].text,
-                'model': model
+                'original_response': response,
+                'critique': critique_response.content[0].text,
+                'passes_check': 'problematic' not in critique_response.content[0].text.lower()
             }
+            
         except Exception as e:
-            logging.error(f"Anthropic image analysis error: {str(e)}")
-            raise
+            logging.error(f"Constitutional AI check error: {str(e)}")
+            raise e
+    
+    def analyze_text_safety(self, text):
+        """Analyze text for safety concerns"""
+        try:
+            safety_prompt = f"""
+Please analyze the following text for potential safety concerns including:
+- Harmful content
+- Bias or discrimination
+- Misinformation
+- Privacy violations
+- Inappropriate content
+
+Text to analyze: {text}
+
+Provide a safety assessment with a score from 1-10 (10 being completely safe).
+"""
+            
+            response = self.client.messages.create(
+                model=self.default_model,
+                messages=[{
+                    'role': 'user',
+                    'content': safety_prompt
+                }],
+                max_tokens=500
+            )
+            
+            return {
+                'text': text,
+                'safety_analysis': response.content[0].text,
+                'timestamp': logging.time()
+            }
+            
+        except Exception as e:
+            logging.error(f"Safety analysis error: {str(e)}")
+            raise e
+    
+    def get_available_models(self):
+        """Get list of available Claude models"""
+        return [
+            "claude-sonnet-4-20250514",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-haiku-20240307"
+        ]

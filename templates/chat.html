@@ -2,234 +2,499 @@
 
 {% block title %}Chat - Autogent Studio{% endblock %}
 
+{% block additional_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+<style>
+.chat-container {
+    height: calc(100vh - 120px);
+    display: flex;
+    overflow: hidden;
+}
+
+.chat-sidebar {
+    width: 300px;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    overflow-y: auto;
+}
+
+.chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.chat-header {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.chat-input-area {
+    padding: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.chat-item {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.chat-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-item.active {
+    background: rgba(102, 126, 234, 0.3);
+    border-right: 3px solid #667eea;
+}
+
+.message {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.message.user {
+    flex-direction: row-reverse;
+}
+
+.message-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.message-content {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 1rem;
+    max-width: 70%;
+    word-wrap: break-word;
+}
+
+.message.user .message-content {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+}
+
+.typing-indicator {
+    display: none;
+    padding: 1rem;
+    font-style: italic;
+    color: #888;
+}
+
+.model-selector {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: white;
+    padding: 0.5rem;
+}
+
+.model-selector:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+}
+
+.advanced-options {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.advanced-toggle {
+    cursor: pointer;
+    color: #667eea;
+    text-decoration: none;
+}
+
+.advanced-toggle:hover {
+    color: #764ba2;
+}
+
+@media (max-width: 768px) {
+    .chat-container {
+        flex-direction: column;
+    }
+    
+    .chat-sidebar {
+        width: 100%;
+        height: 200px;
+        order: 2;
+    }
+    
+    .chat-main {
+        order: 1;
+        height: calc(100vh - 320px);
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row h-100">
+<div class="chat-container">
     <!-- Chat Sidebar -->
-    <div class="col-md-3 border-end bg-secondary h-100">
-        <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
-            <h5 class="mb-0">
-                <i class="fas fa-comments me-2"></i>Conversations
-            </h5>
-            <button class="btn btn-primary btn-sm" onclick="createNewChat()">
-                <i class="fas fa-plus"></i>
-            </button>
+    <div class="chat-sidebar">
+        <div class="p-3 border-bottom">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="text-white mb-0">
+                    <i class="fas fa-comments me-2"></i>
+                    Conversations
+                </h5>
+                <button class="btn btn-primary btn-sm" id="new-chat-btn" title="New Chat">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+            
+            <!-- Search Chats -->
+            <div class="search-box mb-3">
+                <input type="text" class="form-control form-control-sm" id="chat-search" placeholder="Search conversations...">
+            </div>
         </div>
         
-        <div id="chatList" class="list-group list-group-flush">
-            {% for chat in chats %}
-                <a href="{{ url_for('chat.chat_session', chat_id=chat.id) }}" 
-                   class="list-group-item list-group-item-action bg-secondary text-light border-secondary {% if chat.id == current_chat_id %}active{% endif %}">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">{{ chat.title }}</h6>
-                        <small>{{ chat.updated_at.strftime('%m/%d') }}</small>
-                    </div>
-                    <p class="mb-1 text-muted">{{ chat.model }}</p>
-                    <div class="d-flex justify-content-between">
-                        <small class="text-muted">{{ chat.messages|length }} messages</small>
-                        <div>
-                            <button class="btn btn-sm btn-outline-light" onclick="editChat('{{ chat.id }}')">
-                                <i class="fas fa-edit"></i>
+        <!-- Chat List -->
+        <div class="chat-list" id="chat-list">
+            {% if chats %}
+                {% for chat in chats %}
+                <div class="chat-item" data-chat-id="{{ chat.id }}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="chat-title text-white fw-medium">{{ chat.title or 'New Chat' }}</div>
+                            <div class="chat-preview text-muted small">
+                                {{ chat.model_name }}
+                                {% if chat.is_quantum_enhanced %}
+                                    <span class="badge bg-primary ms-1">Quantum</span>
+                                {% endif %}
+                                {% if chat.is_federated %}
+                                    <span class="badge bg-success ms-1">Federated</span>
+                                {% endif %}
+                                {% if chat.is_neuromorphic %}
+                                    <span class="badge bg-info ms-1">Neuromorphic</span>
+                                {% endif %}
+                            </div>
+                            <div class="chat-date text-muted small">{{ chat.updated_at.strftime('%m/%d %H:%M') }}</div>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm text-muted" data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-v"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteChat('{{ chat.id }}')">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="deleteChat('{{ chat.id }}')">
+                                    <i class="fas fa-trash me-2"></i>Delete
+                                </a></li>
+                            </ul>
                         </div>
                     </div>
-                </a>
-            {% endfor %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center text-muted p-4">
+                    <i class="fas fa-comments fa-3x mb-3"></i>
+                    <p>No conversations yet.<br>Start a new chat to get going!</p>
+                </div>
+            {% endif %}
         </div>
     </div>
     
-    <!-- Chat Area -->
-    <div class="col-md-9 d-flex flex-column">
+    <!-- Main Chat Area -->
+    <div class="chat-main">
         <!-- Chat Header -->
-        <div class="bg-primary text-white p-3 border-bottom">
+        <div class="chat-header">
             <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h4 class="mb-0">
-                        <i class="fas fa-robot me-2"></i>Autogent Studio AI
-                    </h4>
-                    <small class="text-light">Advanced AI with quantum computing capabilities</small>
+                <div class="chat-info">
+                    <h5 class="text-white mb-1" id="current-chat-title">Select a conversation</h5>
+                    <div class="text-muted small" id="current-chat-model">Choose a chat from the sidebar to begin</div>
                 </div>
-                <div class="d-flex gap-2">
-                    <div class="dropdown">
-                        <button class="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-brain me-1"></i>GPT-4o
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="#" onclick="switchModel('gpt-4o')">GPT-4o</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="switchModel('claude-sonnet-4')">Claude Sonnet 4</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="switchModel('gemini-pro')">Gemini Pro</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="#" onclick="switchModel('quantum-enhanced')">
-                                <i class="fas fa-atom me-1"></i>Quantum Enhanced
-                            </a></li>
-                        </ul>
-                    </div>
-                    <button class="btn btn-outline-light" onclick="exportChat()">
-                        <i class="fas fa-download"></i>
+                <div class="chat-actions">
+                    <button class="btn btn-outline-light btn-sm me-2" id="chat-settings-btn" title="Chat Settings">
+                        <i class="fas fa-cog"></i>
                     </button>
-                    <button class="btn btn-outline-light" onclick="shareChat()">
-                        <i class="fas fa-share"></i>
+                    <button class="btn btn-outline-light btn-sm" id="clear-chat-btn" title="Clear Messages">
+                        <i class="fas fa-broom"></i>
                     </button>
                 </div>
             </div>
         </div>
         
-        <!-- Chat Messages -->
-        <div id="chatMessages" class="flex-grow-1 p-3 overflow-auto">
-            <div id="messageContainer">
-                <!-- Messages will be loaded here -->
+        <!-- Messages Area -->
+        <div class="chat-messages" id="chat-messages">
+            <div class="welcome-message text-center text-muted">
+                <div class="mb-4">
+                    <img src="{{ url_for('static', filename='images/autogent-logo.svg') }}" alt="Autogent Studio" style="height: 80px; opacity: 0.5;">
+                </div>
+                <h4>Welcome to Autogent Studio Chat</h4>
+                <p>Start a conversation with our advanced AI models. Choose from GPT-4o, Claude Sonnet 4, and other cutting-edge AI systems.</p>
+                <div class="mt-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="feature-highlight p-3 rounded">
+                                <i class="fas fa-atom fa-2x text-primary mb-2"></i>
+                                <h6>Quantum Enhanced</h6>
+                                <small>Leverage quantum computing for complex problem solving</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="feature-highlight p-3 rounded">
+                                <i class="fas fa-brain fa-2x text-success mb-2"></i>
+                                <h6>Neuromorphic AI</h6>
+                                <small>Ultra-efficient edge AI processing</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="feature-highlight p-3 rounded">
+                                <i class="fas fa-shield-alt fa-2x text-warning mb-2"></i>
+                                <h6>AI Safety</h6>
+                                <small>Built-in safety protocols and alignment verification</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Typing Indicator -->
+        <div class="typing-indicator" id="typing-indicator">
+            <div class="message">
+                <div class="message-avatar">AI</div>
+                <div class="message-content">
+                    <div class="typing-animation">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
             </div>
         </div>
         
         <!-- Chat Input -->
-        <div class="border-top p-3">
-            <div class="input-group">
-                <input type="text" id="messageInput" class="form-control form-control-lg bg-dark text-light border-secondary" 
-                       placeholder="Type your message..." onkeypress="handleKeyPress(event)">
-                <button class="btn btn-primary" type="button" onclick="sendMessage()">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-                <div class="btn-group">
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-plus"></i>
+        <div class="chat-input-area">
+            <form id="chat-form" class="mb-0">
+                <div class="input-group">
+                    <textarea class="form-control" id="message-input" rows="1" placeholder="Type your message..." style="resize: none; max-height: 120px;"></textarea>
+                    <button class="btn btn-primary" type="submit" id="send-btn">
+                        <i class="fas fa-paper-plane"></i>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#" onclick="uploadFile()">
-                            <i class="fas fa-file me-2"></i>Upload File
-                        </a></li>
-                        <li><a class="dropdown-item" href="#" onclick="toggleTerminal()">
-                            <i class="fas fa-terminal me-2"></i>Terminal
-                        </a></li>
-                        <li><a class="dropdown-item" href="#" onclick="generateImage()">
-                            <i class="fas fa-image me-2"></i>Generate Image
-                        </a></li>
-                        <li><a class="dropdown-item" href="#" onclick="useKnowledgeBase()">
-                            <i class="fas fa-database me-2"></i>Knowledge Base
-                        </a></li>
-                    </ul>
                 </div>
-            </div>
-            <div class="mt-2 d-flex justify-content-between align-items-center">
-                <small class="text-muted">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Use @ for knowledge bases, # for quantum computing, ! for terminal
-                </small>
-                <div class="d-flex gap-2">
-                    <span class="badge bg-success" id="connectionStatus">Connected</span>
-                    <span class="badge bg-info" id="typingIndicator" style="display: none;">AI is typing...</span>
+                
+                <!-- Advanced Options -->
+                <div class="mt-2">
+                    <a href="#" class="advanced-toggle small" data-bs-toggle="collapse" data-bs-target="#advanced-options">
+                        <i class="fas fa-cog me-1"></i>
+                        Advanced Options
+                    </a>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Terminal Panel -->
-        <div id="terminalPanel" class="border-top bg-dark p-3" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="mb-0">
-                    <i class="fas fa-terminal me-2"></i>Plandex Terminal
-                </h6>
-                <button class="btn btn-sm btn-outline-light" onclick="toggleTerminal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div id="terminal" class="bg-black text-light p-3 rounded font-monospace" style="height: 200px; overflow-y: auto;">
-                <div class="text-success">$ Welcome to Plandex Terminal - AI-powered development assistant</div>
-                <div class="text-muted">Type 'help' for available commands</div>
-            </div>
-            <div class="input-group mt-2">
-                <span class="input-group-text bg-dark text-success border-secondary">$</span>
-                <input type="text" id="terminalInput" class="form-control bg-dark text-light border-secondary" 
-                       placeholder="Enter command..." onkeypress="handleTerminalKeyPress(event)">
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Image Generation Modal -->
-<div class="modal fade" id="imageGenerationModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content bg-dark">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-image me-2"></i>Generate Image
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Image Prompt</label>
-                    <textarea id="imagePrompt" class="form-control bg-dark text-light border-secondary" 
-                              rows="3" placeholder="Describe the image you want to generate..."></textarea>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Model</label>
-                    <select id="imageModel" class="form-select bg-dark text-light border-secondary">
-                        <option value="dall-e-3">DALL-E 3</option>
-                        <option value="midjourney">Midjourney</option>
-                        <option value="neuromorphic-enhanced">Neuromorphic Enhanced</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="handleImageGeneration()">Generate</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Knowledge Base Modal -->
-<div class="modal fade" id="knowledgeBaseModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content bg-dark">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-database me-2"></i>Select Knowledge Base
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="knowledgeBaseList" class="list-group">
-                    <!-- Knowledge bases will be loaded here -->
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- File Upload Modal -->
-<div class="modal fade" id="fileUploadModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content bg-dark">
-            <div class="modal-header">
-                <h5 class="modal-title">Upload File</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="file" id="fileInput" class="form-control bg-dark text-light border-secondary" multiple>
-                <div class="mt-3">
-                    <small class="text-muted">
-                        Supported formats: PDF, DOC, TXT, Images, Audio, Video
-                    </small>
-                </div>
-                <div id="uploadProgress" class="mt-3" style="display: none;">
-                    <div class="progress">
-                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                
+                <div class="collapse" id="advanced-options">
+                    <div class="advanced-options">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted">AI Model</label>
+                                <select class="model-selector form-select form-select-sm" id="model-select">
+                                    <option value="gpt-4o">GPT-4o (OpenAI)</option>
+                                    <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (Anthropic)</option>
+                                    <option value="gpt-4o-mini">GPT-4o Mini (OpenAI)</option>
+                                    <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (Anthropic)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted">Temperature</label>
+                                <input type="range" class="form-range" id="temperature-slider" min="0" max="2" step="0.1" value="0.7">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>Precise</span>
+                                    <span id="temperature-value">0.7</span>
+                                    <span>Creative</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="quantum-enhanced">
+                                    <label class="form-check-label small text-muted" for="quantum-enhanced">
+                                        <i class="fas fa-atom me-1"></i>
+                                        Quantum Enhanced
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="federated-learning">
+                                    <label class="form-check-label small text-muted" for="federated-learning">
+                                        <i class="fas fa-network-wired me-1"></i>
+                                        Federated Learning
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="neuromorphic-ai">
+                                    <label class="form-check-label small text-muted" for="neuromorphic-ai">
+                                        <i class="fas fa-brain me-1"></i>
+                                        Neuromorphic AI
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- New Chat Modal -->
+<div class="modal fade" id="newChatModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header">
+                <h5 class="modal-title">New Chat Configuration</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="new-chat-form">
+                    <div class="mb-3">
+                        <label class="form-label">Chat Title</label>
+                        <input type="text" class="form-control" id="new-chat-title" placeholder="Enter chat title...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">AI Model</label>
+                        <select class="form-select" id="new-chat-model">
+                            <option value="gpt-4o">GPT-4o (OpenAI)</option>
+                            <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (Anthropic)</option>
+                            <option value="gpt-4o-mini">GPT-4o Mini (OpenAI)</option>
+                            <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (Anthropic)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">System Prompt (Optional)</label>
+                        <textarea class="form-control" id="new-chat-system-prompt" rows="3" placeholder="Define the AI's role and behavior..."></textarea>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Temperature</label>
+                            <input type="range" class="form-range" id="new-chat-temperature" min="0" max="2" step="0.1" value="0.7">
+                            <div class="text-center small text-muted" id="new-chat-temp-value">0.7</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Max Tokens</label>
+                            <select class="form-select" id="new-chat-max-tokens">
+                                <option value="1024">1,024</option>
+                                <option value="2048" selected>2,048</option>
+                                <option value="4096">4,096</option>
+                                <option value="8192">8,192</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <h6>Advanced Features</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="new-chat-quantum">
+                                    <label class="form-check-label" for="new-chat-quantum">
+                                        <i class="fas fa-atom me-1"></i>
+                                        Quantum Enhanced
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="new-chat-federated">
+                                    <label class="form-check-label" for="new-chat-federated">
+                                        <i class="fas fa-network-wired me-1"></i>
+                                        Federated Learning
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="new-chat-neuromorphic">
+                                    <label class="form-check-label" for="new-chat-neuromorphic">
+                                        <i class="fas fa-brain me-1"></i>
+                                        Neuromorphic AI
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="new-chat-safety" checked>
+                                    <label class="form-check-label" for="new-chat-safety">
+                                        <i class="fas fa-shield-alt me-1"></i>
+                                        AI Safety Protocols
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="handleFileUpload()">Upload</button>
+                <button type="button" class="btn btn-primary" id="create-chat-btn">Create Chat</button>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block additional_js %}
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
-<script src="{{ url_for('static', filename='js/terminal.js') }}"></script>
+<script>
+// Initialize chat functionality
+$(document).ready(function() {
+    AutogentChat.init();
+    
+    // Auto-resize textarea
+    $('#message-input').on('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+    
+    // Temperature slider updates
+    $('#temperature-slider, #new-chat-temperature').on('input', function() {
+        const value = $(this).val();
+        $(this).siblings().find('#temperature-value, #new-chat-temp-value').text(value);
+    });
+    
+    // Handle Enter key in message input
+    $('#message-input').on('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            $('#chat-form').submit();
+        }
+    });
+    
+    // Search functionality
+    $('#chat-search').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        $('.chat-item').each(function() {
+            const title = $(this).find('.chat-title').text().toLowerCase();
+            $(this).toggle(title.includes(searchTerm));
+        });
+    });
+});
+</script>
 {% endblock %}
-

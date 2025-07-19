@@ -1,0 +1,805 @@
+{% extends "base.html" %}
+
+{% block title %}AI Image Generation - Autogent Studio{% endblock %}
+
+{% block page_title %}AI Image Generation{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="mb-4">
+            <h2>AI Image Generation</h2>
+            <p class="text-muted">Create stunning images with DALL-E 3, Midjourney, and advanced AI models</p>
+        </div>
+    </div>
+</div>
+
+<!-- Generation Interface -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="as-card">
+            <div class="as-card-header">
+                <h6 class="as-card-title">Create New Image</h6>
+                <div class="model-selector">
+                    <select class="form-select form-select-sm" id="imageModel" style="width: auto;">
+                        <option value="dall-e-3">DALL-E 3</option>
+                        <option value="midjourney">Midjourney</option>
+                        <option value="stable-diffusion">Stable Diffusion</option>
+                        <option value="neuromorphic-enhanced">Neuromorphic Enhanced</option>
+                    </select>
+                </div>
+            </div>
+            <div class="as-card-body">
+                <form id="imageGenerationForm">
+                    <div class="mb-4">
+                        <label for="imagePrompt" class="form-label">Prompt</label>
+                        <textarea class="form-control" id="imagePrompt" rows="4" 
+                                  placeholder="Describe the image you want to create in detail..."></textarea>
+                        <div class="form-text">
+                            <i class="fas fa-lightbulb me-1"></i>
+                            Tip: Be specific about style, colors, composition, and mood for better results.
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced Options -->
+                    <div class="advanced-options">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Advanced Options</h6>
+                            <button type="button" class="as-btn as-btn-sm as-btn-secondary" data-bs-toggle="collapse" data-bs-target="#advancedSettings">
+                                <i class="fas fa-cog me-1"></i>Settings
+                            </button>
+                        </div>
+                        
+                        <div class="collapse" id="advancedSettings">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="imageSize" class="form-label">Size</label>
+                                        <select class="form-select" id="imageSize">
+                                            <option value="1024x1024">Square (1024x1024)</option>
+                                            <option value="1792x1024">Landscape (1792x1024)</option>
+                                            <option value="1024x1792">Portrait (1024x1792)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="imageQuality" class="form-label">Quality</label>
+                                        <select class="form-select" id="imageQuality">
+                                            <option value="standard">Standard</option>
+                                            <option value="hd">HD</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="imageStyle" class="form-label">Style</label>
+                                        <select class="form-select" id="imageStyle">
+                                            <option value="vivid">Vivid</option>
+                                            <option value="natural">Natural</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="safetyLevel" class="form-label">Safety Level</label>
+                                        <select class="form-select" id="safetyLevel">
+                                            <option value="standard">Standard</option>
+                                            <option value="strict">Strict</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="negativePrompt" class="form-label">Negative Prompt (What to avoid)</label>
+                                <textarea class="form-control" id="negativePrompt" rows="2" 
+                                          placeholder="e.g., blurry, low quality, distorted..."></textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enableNeuromorphic">
+                                    <label class="form-check-label" for="enableNeuromorphic">
+                                        Enable Neuromorphic Enhancement
+                                        <small class="text-muted d-block">Use edge AI for real-time optimization</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="as-btn as-btn-primary flex-grow-1" id="generateBtn">
+                            <i class="fas fa-magic me-2"></i>Generate Image
+                        </button>
+                        <button type="button" class="as-btn as-btn-secondary" onclick="useRandomPrompt()">
+                            <i class="fas fa-dice me-1"></i>Random
+                        </button>
+                        <button type="button" class="as-btn as-btn-secondary" onclick="clearForm()">
+                            <i class="fas fa-trash me-1"></i>Clear
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Generation Progress -->
+        <div class="as-card mt-4" id="generationProgress" style="display: none;">
+            <div class="as-card-body">
+                <div class="d-flex align-items-center">
+                    <div class="as-loading me-3"></div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">Generating Image...</h6>
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted" id="progressText">Initializing...</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Prompts -->
+    <div class="col-lg-4">
+        <div class="as-card">
+            <div class="as-card-header">
+                <h6 class="as-card-title">Quick Prompts</h6>
+            </div>
+            <div class="as-card-body">
+                <div class="prompt-categories">
+                    <div class="prompt-category mb-3">
+                        <h6 class="text-primary">
+                            <i class="fas fa-palette me-1"></i>Artistic Styles
+                        </h6>
+                        <div class="prompt-buttons">
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('digital art, vibrant colors')">Digital Art</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('oil painting, classical style')">Oil Painting</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('watercolor, soft brushstrokes')">Watercolor</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('cyberpunk, neon lights')">Cyberpunk</button>
+                        </div>
+                    </div>
+                    
+                    <div class="prompt-category mb-3">
+                        <h6 class="text-success">
+                            <i class="fas fa-camera me-1"></i>Photography
+                        </h6>
+                        <div class="prompt-buttons">
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('professional photography, DSLR')">Professional</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('macro photography, extreme close-up')">Macro</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('landscape photography, golden hour')">Landscape</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('portrait photography, shallow depth of field')">Portrait</button>
+                        </div>
+                    </div>
+                    
+                    <div class="prompt-category mb-3">
+                        <h6 class="text-warning">
+                            <i class="fas fa-rocket me-1"></i>Sci-Fi & Fantasy
+                        </h6>
+                        <div class="prompt-buttons">
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('futuristic cityscape, flying cars')">Future City</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('magical forest, ethereal lighting')">Magical Forest</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('space station, stars background')">Space Station</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('dragon, fantasy creature')">Dragon</button>
+                        </div>
+                    </div>
+                    
+                    <div class="prompt-category">
+                        <h6 class="text-info">
+                            <i class="fas fa-brain me-1"></i>AI & Technology
+                        </h6>
+                        <div class="prompt-buttons">
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('artificial intelligence, neural networks')">AI Networks</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('quantum computer, glowing circuits')">Quantum Tech</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('robot, humanoid design')">Robot</button>
+                            <button class="as-btn as-btn-sm as-btn-secondary mb-2" onclick="addPromptText('hologram, transparent projection')">Hologram</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Generation Tips -->
+        <div class="as-card mt-4">
+            <div class="as-card-header">
+                <h6 class="as-card-title">
+                    <i class="fas fa-lightbulb me-1"></i>Generation Tips
+                </h6>
+            </div>
+            <div class="as-card-body">
+                <div class="tips-list">
+                    <div class="tip-item mb-3">
+                        <h6 class="text-primary">Be Descriptive</h6>
+                        <p class="small text-muted">Include details about style, mood, colors, and composition for better results.</p>
+                    </div>
+                    
+                    <div class="tip-item mb-3">
+                        <h6 class="text-success">Use Quality Terms</h6>
+                        <p class="small text-muted">Add terms like "high quality", "detailed", "professional" to improve image quality.</p>
+                    </div>
+                    
+                    <div class="tip-item mb-3">
+                        <h6 class="text-warning">Specify Art Style</h6>
+                        <p class="small text-muted">Mention specific art styles or artists for unique aesthetic results.</p>
+                    </div>
+                    
+                    <div class="tip-item">
+                        <h6 class="text-info">Neuromorphic Enhancement</h6>
+                        <p class="small text-muted">Enable edge AI processing for real-time optimization and energy efficiency.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Generated Images Gallery -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="as-card">
+            <div class="as-card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="as-card-title">Generated Images</h6>
+                    <div class="gallery-controls">
+                        <button class="as-btn as-btn-sm as-btn-secondary me-2" onclick="clearGallery()">
+                            <i class="fas fa-trash me-1"></i>Clear All
+                        </button>
+                        <div class="btn-group" role="group">
+                            <button class="as-btn as-btn-sm as-btn-secondary active" data-view="grid">
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button class="as-btn as-btn-sm as-btn-secondary" data-view="list">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="as-card-body">
+                <div class="image-gallery" id="imageGallery">
+                    <div class="empty-gallery text-center py-5">
+                        <i class="fas fa-images fa-4x text-muted mb-3"></i>
+                        <h5>No Images Generated Yet</h5>
+                        <p class="text-muted">Your generated images will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div class="modal fade" id="imageModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content as-card">
+            <div class="modal-header">
+                <h5 class="modal-title">Generated Image</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="image-display text-center">
+                            <img src="" alt="Generated Image" class="img-fluid" id="modalImage">
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="image-details">
+                            <h6>Generation Details</h6>
+                            <div class="detail-item">
+                                <strong>Prompt:</strong>
+                                <p class="text-muted" id="modalPrompt"></p>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Model:</strong>
+                                <span id="modalModel"></span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Size:</strong>
+                                <span id="modalSize"></span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Generated:</strong>
+                                <span id="modalDate"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="image-actions mt-4">
+                            <button class="as-btn as-btn-primary as-btn-block mb-2" onclick="downloadImage()">
+                                <i class="fas fa-download me-2"></i>Download
+                            </button>
+                            <button class="as-btn as-btn-success as-btn-block mb-2" onclick="shareImage()">
+                                <i class="fas fa-share me-2"></i>Share
+                            </button>
+                            <button class="as-btn as-btn-secondary as-btn-block mb-2" onclick="generateVariation()">
+                                <i class="fas fa-magic me-2"></i>Generate Variation
+                            </button>
+                            <button class="as-btn as-btn-warning as-btn-block mb-2" onclick="editPrompt()">
+                                <i class="fas fa-edit me-2"></i>Edit & Regenerate
+                            </button>
+                            <button class="as-btn as-btn-danger as-btn-block" onclick="deleteImage()">
+                                <i class="fas fa-trash me-2"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block css %}
+<style>
+.prompt-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.prompt-category {
+    border-bottom: 1px solid var(--as-bg-tertiary);
+    padding-bottom: var(--as-space-md);
+}
+
+.prompt-category:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.image-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--as-space-md);
+}
+
+.gallery-item {
+    position: relative;
+    border-radius: var(--as-radius-lg);
+    overflow: hidden;
+    transition: var(--as-transition);
+    cursor: pointer;
+}
+
+.gallery-item:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--as-shadow-xl);
+}
+
+.gallery-image {
+    width: 100%;
+    height: 280px;
+    object-fit: cover;
+    display: block;
+}
+
+.gallery-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    color: white;
+    padding: var(--as-space-lg) var(--as-space-md) var(--as-space-md);
+    transform: translateY(100%);
+    transition: var(--as-transition);
+}
+
+.gallery-item:hover .gallery-overlay {
+    transform: translateY(0);
+}
+
+.gallery-prompt {
+    font-size: 0.9rem;
+    margin-bottom: var(--as-space-sm);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.gallery-meta {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.list-view .image-gallery {
+    display: block;
+}
+
+.list-view .gallery-item {
+    display: flex;
+    align-items: center;
+    padding: var(--as-space-md);
+    background: var(--as-bg-secondary);
+    border-radius: var(--as-radius-lg);
+    margin-bottom: var(--as-space-md);
+}
+
+.list-view .gallery-image {
+    width: 120px;
+    height: 120px;
+    margin-right: var(--as-space-md);
+    border-radius: var(--as-radius-md);
+}
+
+.list-view .gallery-overlay {
+    position: static;
+    background: transparent;
+    color: var(--as-text-primary);
+    padding: 0;
+    transform: none;
+    flex: 1;
+}
+
+.generation-steps {
+    margin-top: var(--as-space-md);
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    padding: var(--as-space-sm) 0;
+    border-bottom: 1px solid var(--as-bg-tertiary);
+}
+
+.step:last-child {
+    border-bottom: none;
+}
+
+.step-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--as-bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--as-space-md);
+    font-size: 0.75rem;
+}
+
+.step.active .step-icon {
+    background: var(--as-primary);
+    color: white;
+}
+
+.step.completed .step-icon {
+    background: var(--as-success);
+    color: white;
+}
+
+.detail-item {
+    margin-bottom: var(--as-space-md);
+    padding-bottom: var(--as-space-sm);
+    border-bottom: 1px solid var(--as-bg-tertiary);
+}
+
+.detail-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.tip-item {
+    padding: var(--as-space-sm);
+    background: var(--as-bg-primary);
+    border-radius: var(--as-radius-md);
+    border-left: 3px solid var(--as-primary);
+}
+
+.empty-gallery {
+    grid-column: 1 / -1;
+}
+</style>
+{% endblock %}
+
+{% block js %}
+<script>
+// Image generation state
+let currentImageData = null;
+let generatedImages = JSON.parse(localStorage.getItem('autogent_generated_images') || '[]');
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    loadGallery();
+    
+    // Form submission
+    document.getElementById('imageGenerationForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        generateImage();
+    });
+    
+    // Gallery view toggle
+    document.querySelectorAll('[data-view]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const view = this.dataset.view;
+            document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            const gallery = document.getElementById('imageGallery');
+            if (view === 'list') {
+                gallery.classList.add('list-view');
+            } else {
+                gallery.classList.remove('list-view');
+            }
+        });
+    });
+});
+
+async function generateImage() {
+    const prompt = document.getElementById('imagePrompt').value.trim();
+    if (!prompt) {
+        window.autogentStudio.showNotification('Please enter a prompt', 'warning');
+        return;
+    }
+    
+    const formData = {
+        prompt: prompt,
+        model: document.getElementById('imageModel').value,
+        size: document.getElementById('imageSize').value,
+        quality: document.getElementById('imageQuality').value,
+        style: document.getElementById('imageStyle').value,
+        safety_level: document.getElementById('safetyLevel').value,
+        negative_prompt: document.getElementById('negativePrompt').value,
+        neuromorphic_enhanced: document.getElementById('enableNeuromorphic').checked
+    };
+    
+    // Show progress
+    showGenerationProgress();
+    
+    try {
+        const response = await fetch('/api/generate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const imageData = {
+                id: Date.now(),
+                url: data.image_url,
+                prompt: prompt,
+                model: formData.model,
+                size: formData.size,
+                revised_prompt: data.revised_prompt,
+                generated_at: new Date().toISOString(),
+                ...formData
+            };
+            
+            generatedImages.unshift(imageData);
+            localStorage.setItem('autogent_generated_images', JSON.stringify(generatedImages));
+            
+            hideGenerationProgress();
+            loadGallery();
+            
+            window.autogentStudio.showNotification('Image generated successfully!', 'success');
+            
+            // Show the new image immediately
+            showImageModal(imageData);
+        } else {
+            throw new Error(data.error || 'Generation failed');
+        }
+    } catch (error) {
+        hideGenerationProgress();
+        window.autogentStudio.showNotification(`Generation failed: ${error.message}`, 'error');
+    }
+}
+
+function showGenerationProgress() {
+    const progressDiv = document.getElementById('generationProgress');
+    progressDiv.style.display = 'block';
+    
+    const generateBtn = document.getElementById('generateBtn');
+    generateBtn.disabled = true;
+    generateBtn.innerHTML = '<span class="as-loading me-2"></span>Generating...';
+    
+    // Simulate progress
+    let progress = 0;
+    const progressBar = progressDiv.querySelector('.progress-bar');
+    const progressText = document.getElementById('progressText');
+    
+    const steps = [
+        'Analyzing prompt...',
+        'Applying AI safety checks...',
+        'Generating image...',
+        'Applying neuromorphic enhancement...',
+        'Finalizing result...'
+    ];
+    
+    const interval = setInterval(() => {
+        progress += Math.random() * 20;
+        if (progress > 90) progress = 90;
+        
+        progressBar.style.width = progress + '%';
+        progressText.textContent = steps[Math.floor(progress / 20)] || 'Processing...';
+    }, 1000);
+    
+    // Store interval to clear later
+    progressDiv.dataset.interval = interval;
+}
+
+function hideGenerationProgress() {
+    const progressDiv = document.getElementById('generationProgress');
+    const interval = progressDiv.dataset.interval;
+    
+    if (interval) {
+        clearInterval(interval);
+    }
+    
+    progressDiv.style.display = 'none';
+    
+    const generateBtn = document.getElementById('generateBtn');
+    generateBtn.disabled = false;
+    generateBtn.innerHTML = '<i class="fas fa-magic me-2"></i>Generate Image';
+}
+
+function loadGallery() {
+    const gallery = document.getElementById('imageGallery');
+    
+    if (generatedImages.length === 0) {
+        gallery.innerHTML = `
+            <div class="empty-gallery text-center py-5">
+                <i class="fas fa-images fa-4x text-muted mb-3"></i>
+                <h5>No Images Generated Yet</h5>
+                <p class="text-muted">Your generated images will appear here</p>
+            </div>
+        `;
+        return;
+    }
+    
+    gallery.innerHTML = generatedImages.map((image, index) => `
+        <div class="gallery-item" onclick="showImageModal(${index})">
+            <img src="${image.url}" alt="Generated Image" class="gallery-image">
+            <div class="gallery-overlay">
+                <div class="gallery-prompt">${image.prompt}</div>
+                <div class="gallery-meta">
+                    <span>${image.model}</span>
+                    <span>${new Date(image.generated_at).toLocaleDateString()}</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showImageModal(indexOrData) {
+    let imageData;
+    
+    if (typeof indexOrData === 'number') {
+        imageData = generatedImages[indexOrData];
+    } else {
+        imageData = indexOrData;
+    }
+    
+    if (!imageData) return;
+    
+    currentImageData = imageData;
+    
+    // Populate modal
+    document.getElementById('modalImage').src = imageData.url;
+    document.getElementById('modalPrompt').textContent = imageData.prompt;
+    document.getElementById('modalModel').textContent = imageData.model;
+    document.getElementById('modalSize').textContent = imageData.size;
+    document.getElementById('modalDate').textContent = new Date(imageData.generated_at).toLocaleString();
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+    modal.show();
+}
+
+function addPromptText(text) {
+    const promptInput = document.getElementById('imagePrompt');
+    const currentValue = promptInput.value.trim();
+    
+    if (currentValue) {
+        promptInput.value = currentValue + ', ' + text;
+    } else {
+        promptInput.value = text;
+    }
+    
+    promptInput.focus();
+}
+
+function useRandomPrompt() {
+    const randomPrompts = [
+        'A futuristic cityscape with flying cars and neon lights, cyberpunk style',
+        'A magical forest with glowing mushrooms and ethereal light rays',
+        'A space station orbiting a colorful nebula, realistic sci-fi',
+        'A steampunk mechanical dragon with brass gears and steam',
+        'An underwater palace with bioluminescent creatures, fantasy art',
+        'A quantum computer in a modern lab, glowing circuits',
+        'A neuromorphic AI brain with flowing data streams',
+        'A robot artist painting on canvas, humanoid design'
+    ];
+    
+    const randomPrompt = randomPrompts[Math.floor(Math.random() * randomPrompts.length)];
+    document.getElementById('imagePrompt').value = randomPrompt;
+}
+
+function clearForm() {
+    document.getElementById('imageGenerationForm').reset();
+    document.getElementById('imagePrompt').focus();
+}
+
+function clearGallery() {
+    if (confirm('Are you sure you want to clear all generated images?')) {
+        generatedImages = [];
+        localStorage.removeItem('autogent_generated_images');
+        loadGallery();
+        window.autogentStudio.showNotification('Gallery cleared', 'success');
+    }
+}
+
+// Modal actions
+function downloadImage() {
+    if (!currentImageData) return;
+    
+    const link = document.createElement('a');
+    link.href = currentImageData.url;
+    link.download = `autogent-image-${currentImageData.id}.png`;
+    link.click();
+}
+
+function shareImage() {
+    if (!currentImageData) return;
+    
+    const shareData = {
+        title: 'Generated with Autogent Studio',
+        text: `Prompt: ${currentImageData.prompt}`,
+        url: currentImageData.url
+    };
+    
+    if (navigator.share) {
+        navigator.share(shareData);
+    } else {
+        navigator.clipboard.writeText(currentImageData.url).then(() => {
+            window.autogentStudio.showNotification('Image URL copied to clipboard', 'success');
+        });
+    }
+}
+
+function generateVariation() {
+    if (!currentImageData) return;
+    
+    // Close modal and generate variation
+    bootstrap.Modal.getInstance(document.getElementById('imageModal')).hide();
+    
+    document.getElementById('imagePrompt').value = currentImageData.prompt + ', variation';
+    generateImage();
+}
+
+function editPrompt() {
+    if (!currentImageData) return;
+    
+    // Close modal and populate form
+    bootstrap.Modal.getInstance(document.getElementById('imageModal')).hide();
+    
+    document.getElementById('imagePrompt').value = currentImageData.prompt;
+    document.getElementById('imagePrompt').focus();
+}
+
+function deleteImage() {
+    if (!currentImageData) return;
+    
+    if (confirm('Are you sure you want to delete this image?')) {
+        const index = generatedImages.findIndex(img => img.id === currentImageData.id);
+        if (index > -1) {
+            generatedImages.splice(index, 1);
+            localStorage.setItem('autogent_generated_images', JSON.stringify(generatedImages));
+            loadGallery();
+            
+            bootstrap.Modal.getInstance(document.getElementById('imageModal')).hide();
+            window.autogentStudio.showNotification('Image deleted', 'success');
+        }
+    }
+}
+</script>
+{% endblock %}

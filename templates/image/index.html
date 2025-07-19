@@ -1,0 +1,606 @@
+{% extends "base.html" %}
+
+{% block title %}AI Painting - Autogent Studio{% endblock %}
+
+{% block content %}
+<div class="image-generation-container">
+    <div class="page-header">
+        <div class="page-title">
+            <h2><i class="fas fa-image me-2"></i>AI Painting Studio</h2>
+            <p class="text-muted">Generate stunning images with DALL-E 3, Midjourney, and neuromorphic-enhanced processing</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#galleryModal">
+                <i class="fas fa-images me-2"></i>View Gallery
+            </button>
+            <button class="btn btn-primary" onclick="generateImage()">
+                <i class="fas fa-magic me-2"></i>Generate Image
+            </button>
+        </div>
+    </div>
+    
+    <!-- Main Generation Interface -->
+    <div class="generation-interface">
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Prompt Input -->
+                <div class="prompt-section">
+                    <div class="prompt-header">
+                        <h5><i class="fas fa-feather-alt me-2"></i>Describe Your Vision</h5>
+                        <div class="prompt-actions">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="enhancePrompt()">
+                                <i class="fas fa-sparkles me-1"></i>Enhance Prompt
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="translatePrompt()">
+                                <i class="fas fa-language me-1"></i>Translate
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="prompt-input">
+                        <textarea 
+                            id="promptInput" 
+                            class="form-control prompt-textarea" 
+                            placeholder="Describe the image you want to create in detail..." 
+                            rows="4"
+                            maxlength="4000"
+                        ></textarea>
+                        <div class="prompt-footer">
+                            <div class="character-count">
+                                <span id="charCount">0</span>/4000
+                            </div>
+                            <div class="prompt-suggestions">
+                                <button class="btn btn-sm btn-outline-primary" onclick="addToPrompt('photorealistic, ')">Photorealistic</button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="addToPrompt('digital art, ')">Digital Art</button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="addToPrompt('oil painting, ')">Oil Painting</button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="addToPrompt('8k resolution, ')">8K Resolution</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Style Presets -->
+                <div class="style-presets">
+                    <h6><i class="fas fa-palette me-2"></i>Style Presets</h6>
+                    <div class="style-grid">
+                        <div class="style-preset" onclick="selectStyle('realistic')">
+                            <div class="style-preview" style="background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);"></div>
+                            <span class="style-name">Realistic</span>
+                        </div>
+                        <div class="style-preset" onclick="selectStyle('artistic')">
+                            <div class="style-preview" style="background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);"></div>
+                            <span class="style-name">Artistic</span>
+                        </div>
+                        <div class="style-preset" onclick="selectStyle('anime')">
+                            <div class="style-preview" style="background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);"></div>
+                            <span class="style-name">Anime</span>
+                        </div>
+                        <div class="style-preset" onclick="selectStyle('cyberpunk')">
+                            <div class="style-preview" style="background: linear-gradient(45deg, #fa709a 0%, #fee140 100%);"></div>
+                            <span class="style-name">Cyberpunk</span>
+                        </div>
+                        <div class="style-preset" onclick="selectStyle('minimalist')">
+                            <div class="style-preview" style="background: linear-gradient(45deg, #a8edea 0%, #fed6e3 100%);"></div>
+                            <span class="style-name">Minimalist</span>
+                        </div>
+                        <div class="style-preset" onclick="selectStyle('vintage')">
+                            <div class="style-preview" style="background: linear-gradient(45deg, #ffecd2 0%, #fcb69f 100%);"></div>
+                            <span class="style-name">Vintage</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Advanced Settings -->
+                <div class="advanced-settings">
+                    <div class="settings-header" data-bs-toggle="collapse" data-bs-target="#advancedCollapse">
+                        <h6><i class="fas fa-cogs me-2"></i>Advanced Settings</h6>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="collapse" id="advancedCollapse">
+                        <div class="settings-content">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="negativePrompt" class="form-label">Negative Prompt</label>
+                                        <textarea id="negativePrompt" class="form-control" rows="2" placeholder="What to avoid in the image..."></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="seedInput" class="form-label">Seed (optional)</label>
+                                        <input type="number" id="seedInput" class="form-control" placeholder="Random seed">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="cfgScale" class="form-label">CFG Scale: <span id="cfgValue">7</span></label>
+                                        <input type="range" id="cfgScale" class="form-range" min="1" max="20" value="7" oninput="document.getElementById('cfgValue').textContent = this.value">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="steps" class="form-label">Steps: <span id="stepsValue">50</span></label>
+                                        <input type="range" id="steps" class="form-range" min="10" max="100" value="50" oninput="document.getElementById('stepsValue').textContent = this.value">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="iterations" class="form-label">Iterations</label>
+                                        <select id="iterations" class="form-select">
+                                            <option value="1">1 image</option>
+                                            <option value="2">2 images</option>
+                                            <option value="4" selected>4 images</option>
+                                            <option value="8">8 images</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <!-- Settings Panel -->
+                <div class="settings-panel">
+                    <h6><i class="fas fa-sliders-h me-2"></i>Generation Settings</h6>
+                    
+                    <div class="mb-3">
+                        <label for="provider" class="form-label">AI Provider</label>
+                        <select id="provider" class="form-select" onchange="updateProviderSettings()">
+                            <option value="dalle3">DALL-E 3 (OpenAI)</option>
+                            <option value="midjourney">Midjourney</option>
+                            <option value="pollinations">Pollinations</option>
+                            <option value="neuromorphic">Neuromorphic Enhanced</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="aspectRatio" class="form-label">Aspect Ratio</label>
+                        <select id="aspectRatio" class="form-select">
+                            <option value="1:1">Square (1:1)</option>
+                            <option value="16:9">Landscape (16:9)</option>
+                            <option value="9:16">Portrait (9:16)</option>
+                            <option value="4:3">Standard (4:3)</option>
+                            <option value="3:4">Vertical (3:4)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="resolution" class="form-label">Resolution</label>
+                        <select id="resolution" class="form-select">
+                            <option value="512">512x512</option>
+                            <option value="768">768x768</option>
+                            <option value="1024" selected>1024x1024</option>
+                            <option value="1536">1536x1536</option>
+                            <option value="2048">2048x2048</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="quality" class="form-label">Quality</label>
+                        <select id="quality" class="form-select">
+                            <option value="standard">Standard</option>
+                            <option value="hd" selected>HD</option>
+                            <option value="ultra">Ultra HD</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Neuromorphic Enhancement Settings -->
+                    <div id="neuromorphicSettings" style="display: none;">
+                        <div class="enhancement-settings">
+                            <h6><i class="fas fa-brain me-2"></i>Neuromorphic Enhancement</h6>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edgeOptimization" checked>
+                                <label class="form-check-label" for="edgeOptimization">
+                                    Edge-optimized processing
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="spikeBasedRendering">
+                                <label class="form-check-label" for="spikeBasedRendering">
+                                    Spike-based rendering
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="energyEfficient" checked>
+                                <label class="form-check-label" for="energyEfficient">
+                                    Energy-efficient generation
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Generation Button -->
+                    <button class="btn btn-primary btn-lg w-100" id="generateBtn" onclick="generateImage()">
+                        <i class="fas fa-magic me-2"></i>Generate Image
+                    </button>
+                </div>
+                
+                <!-- Recent Generations -->
+                <div class="recent-generations mt-4">
+                    <h6><i class="fas fa-history me-2"></i>Recent Generations</h6>
+                    <div class="recent-grid" id="recentGrid">
+                        <!-- Recent images will be populated here -->
+                        <div class="recent-placeholder">
+                            <i class="fas fa-image fa-2x text-muted"></i>
+                            <p class="small text-muted mt-2">Your recent images will appear here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Generated Images Display -->
+    <div class="generated-images" id="generatedImages" style="display: none;">
+        <div class="images-header">
+            <h5><i class="fas fa-sparkles me-2"></i>Generated Images</h5>
+            <div class="images-actions">
+                <button class="btn btn-outline-secondary" onclick="downloadAll()">
+                    <i class="fas fa-download me-2"></i>Download All
+                </button>
+                <button class="btn btn-outline-primary" onclick="saveToGallery()">
+                    <i class="fas fa-save me-2"></i>Save to Gallery
+                </button>
+            </div>
+        </div>
+        <div class="images-grid" id="imagesGrid">
+            <!-- Generated images will be populated here -->
+        </div>
+    </div>
+    
+    <!-- Generation Progress -->
+    <div class="generation-progress" id="generationProgress" style="display: none;">
+        <div class="progress-content">
+            <div class="progress-animation">
+                <div class="progress-circle">
+                    <i class="fas fa-magic"></i>
+                </div>
+                <div class="progress-waves">
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                </div>
+            </div>
+            <h5>Generating Your Image</h5>
+            <p class="progress-status" id="progressStatus">Initializing AI models...</p>
+            <div class="progress mb-3">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" style="width: 0%"></div>
+            </div>
+            <button class="btn btn-outline-secondary" onclick="cancelGeneration()">
+                <i class="fas fa-times me-2"></i>Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Gallery Modal -->
+<div class="modal fade" id="galleryModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-images me-2"></i>Image Gallery</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="gallery-filters">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <select class="form-select" id="galleryProvider">
+                                <option value="all">All Providers</option>
+                                <option value="dalle3">DALL-E 3</option>
+                                <option value="midjourney">Midjourney</option>
+                                <option value="neuromorphic">Neuromorphic</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select" id="gallerySort">
+                                <option value="newest">Newest First</option>
+                                <option value="oldest">Oldest First</option>
+                                <option value="favorites">Favorites</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" placeholder="Search prompts..." id="gallerySearch">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="gallery-grid" id="galleryGrid">
+                    <!-- Gallery images will be populated here -->
+                    <div class="gallery-empty">
+                        <i class="fas fa-images fa-3x text-muted mb-3"></i>
+                        <h6 class="text-muted">No images in gallery yet</h6>
+                        <p class="text-muted">Generate your first image to start building your gallery</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentGenerationId = null;
+let generationInProgress = false;
+
+// Character count for prompt
+const promptInput = document.getElementById('promptInput');
+promptInput.addEventListener('input', function() {
+    document.getElementById('charCount').textContent = this.value.length;
+});
+
+function addToPrompt(text) {
+    promptInput.value += text;
+    promptInput.focus();
+    document.getElementById('charCount').textContent = promptInput.value.length;
+}
+
+function selectStyle(style) {
+    // Remove active class from all presets
+    document.querySelectorAll('.style-preset').forEach(preset => {
+        preset.classList.remove('active');
+    });
+    
+    // Add active class to selected preset
+    event.currentTarget.classList.add('active');
+    
+    // Add style to prompt
+    const stylePrompts = {
+        'realistic': 'photorealistic, detailed, high resolution, ',
+        'artistic': 'artistic, painterly, creative interpretation, ',
+        'anime': 'anime style, manga art, Japanese animation, ',
+        'cyberpunk': 'cyberpunk aesthetic, neon lights, futuristic, ',
+        'minimalist': 'minimalist design, clean lines, simple, ',
+        'vintage': 'vintage style, retro aesthetic, aged look, '
+    };
+    
+    if (stylePrompts[style]) {
+        addToPrompt(stylePrompts[style]);
+    }
+}
+
+function updateProviderSettings() {
+    const provider = document.getElementById('provider').value;
+    const neuromorphicSettings = document.getElementById('neuromorphicSettings');
+    
+    if (provider === 'neuromorphic') {
+        neuromorphicSettings.style.display = 'block';
+    } else {
+        neuromorphicSettings.style.display = 'none';
+    }
+}
+
+function enhancePrompt() {
+    const currentPrompt = promptInput.value;
+    if (!currentPrompt.trim()) {
+        alert('Please enter a prompt first');
+        return;
+    }
+    
+    // Simulate AI prompt enhancement
+    const enhancements = [
+        ', highly detailed',
+        ', professional lighting',
+        ', award-winning photography',
+        ', masterpiece quality',
+        ', trending on artstation'
+    ];
+    
+    const randomEnhancement = enhancements[Math.floor(Math.random() * enhancements.length)];
+    promptInput.value += randomEnhancement;
+    document.getElementById('charCount').textContent = promptInput.value.length;
+}
+
+function translatePrompt() {
+    // Simulate prompt translation
+    alert('Translation feature coming soon!');
+}
+
+function generateImage() {
+    const prompt = promptInput.value.trim();
+    if (!prompt) {
+        alert('Please enter a prompt for image generation');
+        return;
+    }
+    
+    if (generationInProgress) {
+        alert('Generation already in progress');
+        return;
+    }
+    
+    generationInProgress = true;
+    
+    // Show progress
+    document.getElementById('generationProgress').style.display = 'block';
+    document.getElementById('generatedImages').style.display = 'none';
+    
+    // Scroll to progress
+    document.getElementById('generationProgress').scrollIntoView({ behavior: 'smooth' });
+    
+    // Simulate generation process
+    simulateGeneration();
+}
+
+function simulateGeneration() {
+    const progressBar = document.getElementById('progressBar');
+    const progressStatus = document.getElementById('progressStatus');
+    
+    const steps = [
+        { progress: 10, status: 'Loading AI models...' },
+        { progress: 25, status: 'Processing prompt...' },
+        { progress: 40, status: 'Generating image...' },
+        { progress: 60, status: 'Applying style enhancements...' },
+        { progress: 80, status: 'Neuromorphic optimization...' },
+        { progress: 95, status: 'Finalizing image...' },
+        { progress: 100, status: 'Complete!' }
+    ];
+    
+    let currentStep = 0;
+    
+    function updateProgress() {
+        if (currentStep < steps.length) {
+            const step = steps[currentStep];
+            progressBar.style.width = step.progress + '%';
+            progressStatus.textContent = step.status;
+            
+            currentStep++;
+            setTimeout(updateProgress, 1000 + Math.random() * 1000);
+        } else {
+            // Generation complete
+            showGeneratedImages();
+        }
+    }
+    
+    updateProgress();
+}
+
+function showGeneratedImages() {
+    generationInProgress = false;
+    
+    // Hide progress
+    document.getElementById('generationProgress').style.display = 'none';
+    
+    // Show generated images
+    const imagesGrid = document.getElementById('imagesGrid');
+    const iterations = parseInt(document.getElementById('iterations').value);
+    
+    // Generate mock image URLs (in real app, these would come from the API)
+    let html = '';
+    for (let i = 0; i < iterations; i++) {
+        const imageUrl = `https://picsum.photos/512/512?random=${Date.now() + i}`;
+        html += `
+            <div class="generated-image-item">
+                <div class="image-container">
+                    <img src="${imageUrl}" alt="Generated image ${i + 1}" class="generated-image">
+                    <div class="image-overlay">
+                        <button class="btn btn-sm btn-light" onclick="downloadImage('${imageUrl}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button class="btn btn-sm btn-light" onclick="favoriteImage('${imageUrl}')">
+                            <i class="far fa-heart"></i>
+                        </button>
+                        <button class="btn btn-sm btn-light" onclick="useAsReference('${imageUrl}')">
+                            <i class="fas fa-magic"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="image-info">
+                    <div class="image-meta">
+                        <span class="badge bg-primary">${document.getElementById('provider').value.toUpperCase()}</span>
+                        <span class="image-resolution">${document.getElementById('resolution').value}x${document.getElementById('resolution').value}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    imagesGrid.innerHTML = html;
+    document.getElementById('generatedImages').style.display = 'block';
+    
+    // Scroll to results
+    document.getElementById('generatedImages').scrollIntoView({ behavior: 'smooth' });
+    
+    // Add to recent generations
+    addToRecent(imageUrl);
+}
+
+function addToRecent(imageUrl) {
+    const recentGrid = document.getElementById('recentGrid');
+    
+    // Remove placeholder if it exists
+    const placeholder = recentGrid.querySelector('.recent-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+    
+    // Add new recent image
+    const recentItem = document.createElement('div');
+    recentItem.className = 'recent-item';
+    recentItem.innerHTML = `
+        <img src="${imageUrl}" alt="Recent generation" onclick="viewImage('${imageUrl}')">
+    `;
+    
+    recentGrid.insertBefore(recentItem, recentGrid.firstChild);
+    
+    // Keep only last 6 images
+    while (recentGrid.children.length > 6) {
+        recentGrid.removeChild(recentGrid.lastChild);
+    }
+}
+
+function cancelGeneration() {
+    generationInProgress = false;
+    document.getElementById('generationProgress').style.display = 'none';
+}
+
+function downloadImage(imageUrl) {
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = `autogent_generated_${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function downloadAll() {
+    const images = document.querySelectorAll('.generated-image');
+    images.forEach((img, index) => {
+        setTimeout(() => {
+            downloadImage(img.src);
+        }, index * 100);
+    });
+}
+
+function favoriteImage(imageUrl) {
+    // Toggle favorite status
+    const button = event.currentTarget;
+    const icon = button.querySelector('i');
+    
+    if (icon.classList.contains('far')) {
+        icon.classList.remove('far');
+        icon.classList.add('fas');
+        icon.style.color = '#dc3545';
+    } else {
+        icon.classList.remove('fas');
+        icon.classList.add('far');
+        icon.style.color = '';
+    }
+}
+
+function useAsReference(imageUrl) {
+    // Use image as reference for new generation
+    alert('Reference feature coming soon!');
+}
+
+function saveToGallery() {
+    // Save all generated images to gallery
+    alert('Images saved to gallery!');
+}
+
+function viewImage(imageUrl) {
+    // Open image in modal or new tab
+    window.open(imageUrl, '_blank');
+}
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default prompt suggestions
+    const suggestions = [
+        "A majestic dragon soaring over a cyberpunk city at sunset",
+        "A cozy cottage in an enchanted forest with glowing mushrooms",
+        "An astronaut discovering ancient ruins on an alien planet",
+        "A steampunk airship floating through clouds of cotton candy",
+        "A mystical crystal cave with bioluminescent plants"
+    ];
+    
+    // Randomly select and set a suggestion
+    const randomSuggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
+    promptInput.placeholder = randomSuggestion;
+});
+</script>
+{% endblock %}

@@ -1,348 +1,364 @@
-from flask import Blueprint, render_template, request, jsonify, session
-from app import db
-from models import User, NeuromorphicDevice, SpikingNeuralNetwork
-from blueprints.auth import login_required, get_current_user
+from flask import Blueprint, render_template, request, jsonify
+from flask_login import login_required, current_user
+from models import NeuromorphicDevice, SpikingNeuralNetwork, db
 from services.neuromorphic_service import NeuromorphicService
-import logging
-import json
-from datetime import datetime
+import uuid
 
-neuromorphic_bp = Blueprint('neuromorphic', __name__)
+neuromorphic_bp = Blueprint('neuromorphic', __name__, url_prefix='/neuromorphic')
 
 @neuromorphic_bp.route('/')
 @login_required
-def neuromorphic_index():
-    user = get_current_user()
-    devices = NeuromorphicDevice.query.filter_by(user_id=user.id).order_by(NeuromorphicDevice.created_at.desc()).limit(10).all()
-    networks = SpikingNeuralNetwork.query.filter_by(user_id=user.id).order_by(SpikingNeuralNetwork.created_at.desc()).limit(10).all()
+def index():
+    # Get user's neuromorphic devices and networks
+    devices = NeuromorphicDevice.query.filter_by(
+        user_id=current_user.id
+    ).order_by(NeuromorphicDevice.created_at.desc()).all()
     
-    # Calculate summary statistics
-    online_devices = NeuromorphicDevice.query.filter_by(user_id=user.id, is_online=True).count()
-    total_networks = SpikingNeuralNetwork.query.filter_by(user_id=user.id).count()
+    networks = SpikingNeuralNetwork.query.filter_by(
+        user_id=current_user.id
+    ).order_by(SpikingNeuralNetwork.created_at.desc()).all()
     
-    return render_template('neuromorphic/dashboard.html', 
-                         user=user, 
+    return render_template('neuromorphic/index.html', 
                          devices=devices, 
-                         networks=networks,
-                         online_devices=online_devices,
-                         total_networks=total_networks)
+                         networks=networks)
 
 @neuromorphic_bp.route('/snn')
 @login_required
-def spiking_neural_networks():
-    user = get_current_user()
-    networks = SpikingNeuralNetwork.query.filter_by(user_id=user.id).order_by(SpikingNeuralNetwork.created_at.desc()).all()
-    devices = NeuromorphicDevice.query.filter_by(user_id=user.id, is_online=True).all()
+def snn():
+    networks = SpikingNeuralNetwork.query.filter_by(
+        user_id=current_user.id
+    ).order_by(SpikingNeuralNetwork.created_at.desc()).all()
     
-    return render_template('neuromorphic/snn.html', 
-                         user=user, 
-                         networks=networks,
-                         devices=devices)
+    return render_template('neuromorphic/snn.html', networks=networks)
 
 @neuromorphic_bp.route('/edge')
 @login_required
-def edge_deployment():
-    user = get_current_user()
-    devices = NeuromorphicDevice.query.filter_by(user_id=user.id).order_by(NeuromorphicDevice.created_at.desc()).all()
-    
-    return render_template('neuromorphic/edge.html', 
-                         user=user, 
-                         devices=devices)
+def edge():
+    return render_template('neuromorphic/edge.html')
 
 @neuromorphic_bp.route('/hardware')
 @login_required
-def neuromorphic_hardware():
-    user = get_current_user()
-    devices = NeuromorphicDevice.query.filter_by(user_id=user.id).order_by(NeuromorphicDevice.created_at.desc()).all()
+def hardware():
+    devices = NeuromorphicDevice.query.filter_by(
+        user_id=current_user.id
+    ).order_by(NeuromorphicDevice.created_at.desc()).all()
     
-    # Available hardware types
-    hardware_types = [
-        {
-            'id': 'loihi',
-            'name': 'Intel Loihi',
-            'description': 'Intel\'s neuromorphic research chip',
-            'neurons': 131072,
-            'synapses': 130000000,
-            'power': '30mW'
-        },
-        {
-            'id': 'truenorth',
-            'name': 'IBM TrueNorth',
-            'description': 'IBM\'s brain-inspired processor',
-            'neurons': 1000000,
-            'synapses': 256000000,
-            'power': '70mW'
-        },
-        {
-            'id': 'spinnaker',
-            'name': 'SpiNNaker',
-            'description': 'Massively parallel computer architecture',
-            'neurons': 1000000,
-            'synapses': 1000000000,
-            'power': '1W'
-        },
-        {
-            'id': 'akida',
-            'name': 'BrainChip Akida',
-            'description': 'Commercial neuromorphic processor',
-            'neurons': 1200000,
-            'synapses': 10000000,
-            'power': '200mW'
-        }
-    ]
-    
-    return render_template('neuromorphic/hardware.html', 
-                         user=user, 
-                         devices=devices,
-                         hardware_types=hardware_types)
+    return render_template('neuromorphic/hardware.html', devices=devices)
 
-@neuromorphic_bp.route('/devices/create', methods=['POST'])
+@neuromorphic_bp.route('/learning')
 @login_required
-def create_device():
-    user = get_current_user()
+def learning():
+    return render_template('neuromorphic/learning.html')
+
+@neuromorphic_bp.route('/optimization')
+@login_required
+def optimization():
+    return render_template('neuromorphic/optimization.html')
+
+@neuromorphic_bp.route('/realtime')
+@login_required
+def realtime():
+    return render_template('neuromorphic/realtime.html')
+
+@neuromorphic_bp.route('/create-snn', methods=['POST'])
+@login_required
+def create_snn():
     data = request.get_json()
     
-    device_name = data.get('device_name')
-    device_type = data.get('device_type')
-    endpoint_url = data.get('endpoint_url')
-    specifications = data.get('specifications', {})
+    name = data.get('name', '').strip()
+    neuron_model = data.get('neuron_model', 'lif')
+    architecture = data.get('architecture', {})
     
-    if not device_name or not device_type:
-        return jsonify({'error': 'Device name and type are required'}), 400
+    if not name:
+        return jsonify({'error': 'SNN name is required'}), 400
+    
+    if not architecture:
+        return jsonify({'error': 'Network architecture is required'}), 400
     
     try:
+        neuromorphic_service = NeuromorphicService()
+        
+        # Create spiking neural network
+        network_data = neuromorphic_service.create_snn(
+            architecture=architecture,
+            neuron_model=neuron_model
+        )
+        
+        network_id = str(uuid.uuid4())
+        snn = SpikingNeuralNetwork(
+            id=network_id,
+            user_id=current_user.id,
+            name=name,
+            architecture=architecture,
+            neuron_model=neuron_model,
+            network_size=architecture.get('size', 0),
+            deployment_target=data.get('deployment_target', ''),
+            performance_metrics={}
+        )
+        
+        db.session.add(snn)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'network_id': network_id,
+            'network_data': network_data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@neuromorphic_bp.route('/snn/<network_id>')
+@login_required
+def view_snn(network_id):
+    network = SpikingNeuralNetwork.query.filter_by(
+        id=network_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    return render_template('neuromorphic/snn_detail.html', network=network)
+
+@neuromorphic_bp.route('/snn/<network_id>/train', methods=['POST'])
+@login_required
+def train_snn(network_id):
+    network = SpikingNeuralNetwork.query.filter_by(
+        id=network_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    data = request.get_json()
+    training_data = data.get('training_data', {})
+    learning_rule = data.get('learning_rule', 'stdp')
+    
+    try:
+        neuromorphic_service = NeuromorphicService()
+        
+        # Train SNN
+        training_results = neuromorphic_service.train_snn(
+            network=network,
+            training_data=training_data,
+            learning_rule=learning_rule
+        )
+        
+        # Update performance metrics
+        network.performance_metrics = training_results.get('metrics', {})
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'results': training_results
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@neuromorphic_bp.route('/snn/<network_id>/simulate', methods=['POST'])
+@login_required
+def simulate_snn(network_id):
+    network = SpikingNeuralNetwork.query.filter_by(
+        id=network_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    data = request.get_json()
+    input_spikes = data.get('input_spikes', [])
+    simulation_time = data.get('simulation_time', 1000)  # ms
+    
+    try:
+        neuromorphic_service = NeuromorphicService()
+        
+        # Simulate SNN
+        simulation_results = neuromorphic_service.simulate_snn(
+            network=network,
+            input_spikes=input_spikes,
+            simulation_time=simulation_time
+        )
+        
+        return jsonify({
+            'success': True,
+            'results': simulation_results
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@neuromorphic_bp.route('/register-device', methods=['POST'])
+@login_required
+def register_device():
+    data = request.get_json()
+    
+    name = data.get('name', '').strip()
+    device_type = data.get('device_type', 'loihi')
+    location = data.get('location', '')
+    
+    if not name:
+        return jsonify({'error': 'Device name is required'}), 400
+    
+    try:
+        neuromorphic_service = NeuromorphicService()
+        
+        device_id = str(uuid.uuid4())
         device = NeuromorphicDevice(
-            user_id=user.id,
-            device_name=device_name,
+            id=device_id,
+            user_id=current_user.id,
+            name=name,
             device_type=device_type,
-            endpoint_url=endpoint_url,
-            specifications=json.dumps(specifications),
-            is_online=False
+            location=location,
+            capabilities=data.get('capabilities', {}),
+            status='offline'
         )
         
         db.session.add(device)
         db.session.commit()
         
-        logging.info(f"Neuromorphic device created: {device.id}")
+        # Initialize device connection
+        connection_result = neuromorphic_service.connect_device(device)
+        
         return jsonify({
             'success': True,
-            'device_id': device.id,
-            'message': 'Neuromorphic device created successfully'
+            'device_id': device_id,
+            'connection': connection_result
         })
-    
+        
     except Exception as e:
-        db.session.rollback()
-        logging.error(f"Error creating neuromorphic device: {str(e)}")
-        return jsonify({'error': 'Failed to create neuromorphic device'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@neuromorphic_bp.route('/devices/<int:device_id>/connect', methods=['POST'])
+@neuromorphic_bp.route('/device/<device_id>')
 @login_required
-def connect_device(device_id):
-    user = get_current_user()
-    device = NeuromorphicDevice.query.filter_by(id=device_id, user_id=user.id).first_or_404()
+def view_device(device_id):
+    device = NeuromorphicDevice.query.filter_by(
+        id=device_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    return render_template('neuromorphic/device_detail.html', device=device)
+
+@neuromorphic_bp.route('/device/<device_id>/deploy', methods=['POST'])
+@login_required
+def deploy_to_device(device_id):
+    device = NeuromorphicDevice.query.filter_by(
+        id=device_id,
+        user_id=current_user.id
+    ).first_or_404()
+    
+    data = request.get_json()
+    network_id = data.get('network_id')
+    
+    if not network_id:
+        return jsonify({'error': 'Network ID is required'}), 400
+    
+    network = SpikingNeuralNetwork.query.filter_by(
+        id=network_id,
+        user_id=current_user.id
+    ).first_or_404()
     
     try:
         neuromorphic_service = NeuromorphicService()
-        connection_result = neuromorphic_service.connect_device(
-            device_type=device.device_type,
-            endpoint_url=device.endpoint_url,
-            specifications=json.loads(device.specifications) if device.specifications else {}
+        
+        # Deploy network to device
+        deployment_results = neuromorphic_service.deploy_to_device(
+            network=network,
+            device=device
         )
         
-        if connection_result['success']:
-            device.is_online = True
-            db.session.commit()
-            
-            logging.info(f"Neuromorphic device connected: {device.id}")
-            return jsonify({
-                'success': True,
-                'message': 'Device connected successfully',
-                'device_info': connection_result.get('device_info', {})
-            })
-        else:
-            return jsonify({'error': connection_result.get('error', 'Failed to connect device')}), 500
-    
-    except Exception as e:
-        logging.error(f"Error connecting neuromorphic device: {str(e)}")
-        return jsonify({'error': 'Failed to connect device'}), 500
-
-@neuromorphic_bp.route('/snn/create', methods=['POST'])
-@login_required
-def create_snn():
-    user = get_current_user()
-    data = request.get_json()
-    
-    network_name = data.get('network_name')
-    architecture = data.get('architecture')
-    device_id = data.get('device_id')
-    
-    if not network_name or not architecture:
-        return jsonify({'error': 'Network name and architecture are required'}), 400
-    
-    try:
-        network = SpikingNeuralNetwork(
-            user_id=user.id,
-            network_name=network_name,
-            architecture=json.dumps(architecture),
-            device_id=device_id,
-            training_data=json.dumps({}),
-            performance_metrics=json.dumps({})
-        )
-        
-        db.session.add(network)
+        # Update network deployment target
+        network.deployment_target = device_id
         db.session.commit()
         
-        logging.info(f"Spiking neural network created: {network.id}")
         return jsonify({
             'success': True,
-            'network_id': network.id,
-            'message': 'Spiking neural network created successfully'
+            'results': deployment_results
         })
-    
-    except Exception as e:
-        db.session.rollback()
-        logging.error(f"Error creating spiking neural network: {str(e)}")
-        return jsonify({'error': 'Failed to create spiking neural network'}), 500
-
-@neuromorphic_bp.route('/snn/<int:network_id>/train', methods=['POST'])
-@login_required
-def train_snn(network_id):
-    user = get_current_user()
-    network = SpikingNeuralNetwork.query.filter_by(id=network_id, user_id=user.id).first_or_404()
-    
-    data = request.get_json()
-    training_data = data.get('training_data', {})
-    training_params = data.get('training_params', {})
-    
-    try:
-        neuromorphic_service = NeuromorphicService()
-        training_result = neuromorphic_service.train_snn(
-            network_id=network.id,
-            architecture=json.loads(network.architecture),
-            training_data=training_data,
-            training_params=training_params
-        )
         
-        if training_result['success']:
-            # Update training data and performance metrics
-            network.training_data = json.dumps(training_data)
-            network.performance_metrics = json.dumps(training_result.get('metrics', {}))
-            db.session.commit()
-            
-            logging.info(f"Spiking neural network trained: {network.id}")
-            return jsonify({
-                'success': True,
-                'message': 'Spiking neural network trained successfully',
-                'metrics': training_result.get('metrics', {})
-            })
-        else:
-            return jsonify({'error': training_result.get('error', 'Failed to train network')}), 500
-    
     except Exception as e:
-        logging.error(f"Error training spiking neural network: {str(e)}")
-        return jsonify({'error': 'Failed to train spiking neural network'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@neuromorphic_bp.route('/learning')
-@login_required
-def spike_learning():
-    user = get_current_user()
-    
-    # Available learning algorithms
-    learning_algorithms = [
-        {
-            'name': 'Spike-Timing Dependent Plasticity (STDP)',
-            'description': 'Hebbian learning rule based on spike timing',
-            'use_case': 'Unsupervised learning, pattern recognition',
-            'complexity': 'Low'
-        },
-        {
-            'name': 'Reward-Modulated STDP',
-            'description': 'STDP with dopamine-like reward signal',
-            'use_case': 'Reinforcement learning tasks',
-            'complexity': 'Medium'
-        },
-        {
-            'name': 'Tempotron',
-            'description': 'Supervised learning for temporal patterns',
-            'use_case': 'Temporal sequence learning',
-            'complexity': 'Medium'
-        },
-        {
-            'name': 'SpikeProp',
-            'description': 'Backpropagation for spiking networks',
-            'use_case': 'Supervised classification',
-            'complexity': 'High'
-        },
-        {
-            'name': 'Evolutionary Spike Training',
-            'description': 'Evolutionary optimization of spike patterns',
-            'use_case': 'Network topology optimization',
-            'complexity': 'High'
-        }
-    ]
-    
-    return render_template('neuromorphic/learning.html', 
-                         user=user,
-                         learning_algorithms=learning_algorithms)
-
-@neuromorphic_bp.route('/optimization')
-@login_required
-def energy_optimization():
-    user = get_current_user()
-    return render_template('neuromorphic/optimization.html', user=user)
-
-@neuromorphic_bp.route('/realtime')
-@login_required
-def realtime_processing():
-    user = get_current_user()
-    devices = NeuromorphicDevice.query.filter_by(user_id=user.id, is_online=True).all()
-    
-    return render_template('neuromorphic/realtime.html', 
-                         user=user,
-                         devices=devices)
-
-@neuromorphic_bp.route('/spike-visualization/<int:network_id>')
+@neuromorphic_bp.route('/spike-visualization/<network_id>')
 @login_required
 def spike_visualization(network_id):
-    user = get_current_user()
-    network = SpikingNeuralNetwork.query.filter_by(id=network_id, user_id=user.id).first_or_404()
+    network = SpikingNeuralNetwork.query.filter_by(
+        id=network_id,
+        user_id=current_user.id
+    ).first_or_404()
     
     try:
         neuromorphic_service = NeuromorphicService()
-        spike_data = neuromorphic_service.get_spike_visualization(
-            network_id=network.id,
-            time_window=1000  # 1 second
-        )
+        
+        # Generate spike visualization data
+        visualization_data = neuromorphic_service.generate_spike_visualization(network)
         
         return jsonify({
             'success': True,
-            'network_id': network.id,
-            'spike_data': spike_data
+            'visualization': visualization_data
         })
-    
+        
     except Exception as e:
-        logging.error(f"Error getting spike visualization: {str(e)}")
-        return jsonify({'error': 'Failed to get spike visualization'}), 500
+        return jsonify({'error': str(e)}), 500
 
-@neuromorphic_bp.route('/power-analysis/<int:device_id>')
+@neuromorphic_bp.route('/energy-analysis', methods=['POST'])
 @login_required
-def power_analysis(device_id):
-    user = get_current_user()
-    device = NeuromorphicDevice.query.filter_by(id=device_id, user_id=user.id).first_or_404()
+def energy_analysis():
+    data = request.get_json()
+    
+    network_id = data.get('network_id')
+    workload = data.get('workload', {})
+    
+    if not network_id:
+        return jsonify({'error': 'Network ID is required'}), 400
+    
+    network = SpikingNeuralNetwork.query.filter_by(
+        id=network_id,
+        user_id=current_user.id
+    ).first_or_404()
     
     try:
         neuromorphic_service = NeuromorphicService()
-        power_data = neuromorphic_service.analyze_power_consumption(
-            device_id=device.id,
-            device_type=device.device_type
+        
+        # Analyze energy consumption
+        energy_analysis = neuromorphic_service.analyze_energy_consumption(
+            network=network,
+            workload=workload
         )
         
         return jsonify({
             'success': True,
-            'device_id': device.id,
-            'power_analysis': power_data
+            'analysis': energy_analysis
         })
-    
+        
     except Exception as e:
-        logging.error(f"Error analyzing power consumption: {str(e)}")
-        return jsonify({'error': 'Failed to analyze power consumption'}), 500
+        return jsonify({'error': str(e)}), 500
+
+@neuromorphic_bp.route('/platforms')
+@login_required
+def platforms():
+    platforms = {
+        'loihi': {
+            'name': 'Intel Loihi',
+            'description': 'Neuromorphic research chip by Intel',
+            'neuron_capacity': 131072,
+            'synapse_capacity': 131000000,
+            'power_consumption': '30mW',
+            'supported_models': ['lif', 'adaptive_lif']
+        },
+        'truenorth': {
+            'name': 'IBM TrueNorth',
+            'description': 'Neuromorphic processor by IBM',
+            'neuron_capacity': 1000000,
+            'synapse_capacity': 256000000,
+            'power_consumption': '65mW',
+            'supported_models': ['lif']
+        },
+        'spinnaker': {
+            'name': 'SpiNNaker',
+            'description': 'Spiking neural network architecture',
+            'neuron_capacity': 1000000,
+            'synapse_capacity': 1000000000,
+            'power_consumption': '1W',
+            'supported_models': ['lif', 'izhikevich', 'hodgkin_huxley']
+        }
+    }
+    
+    return jsonify({
+        'success': True,
+        'platforms': platforms
+    })

@@ -1,1 +1,1 @@
-# Blueprint package initialization
+# Blueprints package initialization

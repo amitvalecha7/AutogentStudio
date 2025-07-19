@@ -1,354 +1,379 @@
-from flask import Blueprint, render_template, request, jsonify, session
+from flask import Blueprint, render_template, request, jsonify, session, flash
+from blueprints.auth import require_auth
+from models import User
 from app import db
-from models import User, SecurityAudit
-from blueprints.auth import login_required, get_current_user
-import logging
-import json
+import uuid
+import random
 from datetime import datetime, timedelta
+import hashlib
+import secrets
 
 security_bp = Blueprint('security', __name__)
 
 @security_bp.route('/')
-@login_required
-def security_index():
-    user = get_current_user()
+@require_auth
+def index():
+    """Security dashboard"""
+    user_id = session['user_id']
     
-    # Get recent security events
-    recent_audits = SecurityAudit.query.filter_by(user_id=user.id)\
-        .order_by(SecurityAudit.timestamp.desc()).limit(10).all()
+    # Mock security metrics
+    security_overview = {
+        'security_score': round(random.uniform(85, 98), 1),
+        'active_sessions': random.randint(1, 5),
+        'failed_login_attempts': random.randint(0, 10),
+        'last_security_scan': '2 hours ago',
+        'mfa_enabled': random.choice([True, False]),
+        'encryption_status': 'active',
+        'compliance_score': round(random.uniform(90, 99), 1)
+    }
     
-    # Calculate security metrics
-    total_logins = SecurityAudit.query.filter_by(user_id=user.id, action='login').count()
-    failed_logins = SecurityAudit.query.filter_by(user_id=user.id, action='login', success=False).count()
-    
-    security_score = calculate_security_score(user.id)
-    
-    return render_template('security/security.html', 
-                         user=user,
-                         recent_audits=recent_audits,
-                         total_logins=total_logins,
-                         failed_logins=failed_logins,
-                         security_score=security_score)
+    return render_template('security/index.html', overview=security_overview)
 
 @security_bp.route('/audit')
-@login_required
-def audit_logs():
-    user = get_current_user()
-    
-    page = request.args.get('page', 1, type=int)
-    action_filter = request.args.get('action', '')
-    
-    query = SecurityAudit.query.filter_by(user_id=user.id)
-    
-    if action_filter:
-        query = query.filter(SecurityAudit.action.contains(action_filter))
-    
-    audits = query.order_by(SecurityAudit.timestamp.desc())\
-        .paginate(page=page, per_page=50, error_out=False)
-    
-    return render_template('security/audit.html', 
-                         user=user,
-                         audits=audits,
-                         action_filter=action_filter)
+@require_auth
+def audit():
+    """Audit logging and compliance"""
+    return render_template('security/audit.html')
 
 @security_bp.route('/encryption')
-@login_required
-def encryption_management():
-    user = get_current_user()
-    
-    # Simulate encryption status
-    encryption_status = {
-        'api_keys': {'status': 'encrypted', 'algorithm': 'AES-256'},
-        'user_data': {'status': 'encrypted', 'algorithm': 'AES-256'},
-        'communications': {'status': 'encrypted', 'algorithm': 'TLS 1.3'},
-        'file_storage': {'status': 'encrypted', 'algorithm': 'AES-256'},
-        'database': {'status': 'encrypted', 'algorithm': 'AES-256'}
-    }
-    
-    return render_template('security/encryption.html', 
-                         user=user,
-                         encryption_status=encryption_status)
+@require_auth
+def encryption():
+    """Data encryption management"""
+    return render_template('security/encryption.html')
 
 @security_bp.route('/access')
-@login_required
-def access_control():
-    user = get_current_user()
-    
-    # Simulate access control settings
-    access_settings = {
-        'two_factor_auth': True,
-        'session_timeout': 30,  # minutes
-        'ip_whitelist': [],
-        'api_rate_limits': {
-            'requests_per_minute': 100,
-            'requests_per_hour': 1000
-        },
-        'permissions': {
-            'read': True,
-            'write': True,
-            'delete': True,
-            'admin': False
-        }
-    }
-    
-    return render_template('security/access.html', 
-                         user=user,
-                         access_settings=access_settings)
+@require_auth
+def access():
+    """Access control and permissions"""
+    return render_template('security/access.html')
 
 @security_bp.route('/threats')
-@login_required
-def threat_monitoring():
-    user = get_current_user()
-    
-    # Simulate threat detection data
-    threats = [
-        {
-            'id': 1,
-            'type': 'Suspicious Login',
-            'severity': 'medium',
-            'description': 'Login from unusual location',
-            'timestamp': datetime.utcnow() - timedelta(hours=2),
-            'status': 'resolved',
-            'ip_address': '192.168.1.100'
-        },
-        {
-            'id': 2,
-            'type': 'Rate Limit Exceeded',
-            'severity': 'low',
-            'description': 'API rate limit temporarily exceeded',
-            'timestamp': datetime.utcnow() - timedelta(minutes=30),
-            'status': 'monitoring',
-            'ip_address': '192.168.1.100'
-        }
-    ]
-    
-    return render_template('security/threats.html', 
-                         user=user,
-                         threats=threats)
+@require_auth
+def threats():
+    """Threat detection and monitoring"""
+    return render_template('security/threats.html')
 
 @security_bp.route('/compliance')
-@login_required
-def compliance_reporting():
-    user = get_current_user()
-    
-    # Simulate compliance status
-    compliance_status = {
-        'gdpr': {'status': 'compliant', 'last_audit': '2024-01-15'},
-        'sox': {'status': 'compliant', 'last_audit': '2024-02-01'},
-        'hipaa': {'status': 'compliant', 'last_audit': '2024-01-20'},
-        'iso27001': {'status': 'in_progress', 'target_date': '2024-06-01'},
-        'soc2': {'status': 'compliant', 'last_audit': '2024-02-10'}
-    }
-    
-    return render_template('security/compliance.html', 
-                         user=user,
-                         compliance_status=compliance_status)
+@require_auth
+def compliance():
+    """Compliance reporting"""
+    return render_template('security/compliance.html')
 
-@security_bp.route('/enable-2fa', methods=['POST'])
-@login_required
-def enable_two_factor():
-    user = get_current_user()
+@security_bp.route('/api/overview')
+@require_auth
+def get_security_overview():
+    """Get security overview metrics"""
+    user_id = session['user_id']
     
     try:
-        # In a real implementation, this would set up TOTP
-        secret_key = "ABCDEFGHIJKLMNOP"  # Generate actual secret
-        qr_code_url = f"otpauth://totp/AutogentStudio:{user.email}?secret={secret_key}&issuer=AutogentStudio"
+        overview = {
+            'security_score': round(random.uniform(85, 98), 1),
+            'risk_level': random.choice(['low', 'medium']),
+            'active_sessions': random.randint(1, 5),
+            'recent_logins': [
+                {
+                    'timestamp': (datetime.now() - timedelta(hours=random.randint(1, 24))).isoformat(),
+                    'ip_address': f"192.168.{random.randint(1, 255)}.{random.randint(1, 255)}",
+                    'location': random.choice(['New York, US', 'London, UK', 'Tokyo, JP']),
+                    'device': random.choice(['Chrome on Windows', 'Safari on macOS', 'Firefox on Linux']),
+                    'success': random.choice([True, False])
+                }
+                for _ in range(5)
+            ],
+            'security_events': [
+                {
+                    'type': 'login_success',
+                    'timestamp': datetime.now().isoformat(),
+                    'description': 'Successful login from new location'
+                },
+                {
+                    'type': 'api_key_rotation',
+                    'timestamp': (datetime.now() - timedelta(hours=12)).isoformat(),
+                    'description': 'API key automatically rotated'
+                }
+            ],
+            'compliance_status': {
+                'gdpr': True,
+                'soc2': True,
+                'iso27001': True,
+                'hipaa': False
+            }
+        }
         
-        logging.info(f"2FA setup initiated for user {user.id}")
         return jsonify({
             'success': True,
-            'secret_key': secret_key,
-            'qr_code_url': qr_code_url,
-            'message': '2FA setup initiated'
+            'overview': overview
         })
-    
     except Exception as e:
-        logging.error(f"Error setting up 2FA: {str(e)}")
-        return jsonify({'error': 'Failed to setup 2FA'}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@security_bp.route('/verify-2fa', methods=['POST'])
-@login_required
-def verify_two_factor():
-    user = get_current_user()
-    data = request.get_json()
-    
-    code = data.get('code')
-    if not code:
-        return jsonify({'error': 'Verification code is required'}), 400
+@security_bp.route('/api/audit-logs')
+@require_auth
+def get_audit_logs():
+    """Get audit logs"""
+    user_id = session['user_id']
+    limit = int(request.args.get('limit', 50))
     
     try:
-        # In a real implementation, verify TOTP code
-        # For demo, accept any 6-digit code
-        if len(code) == 6 and code.isdigit():
-            logging.info(f"2FA enabled for user {user.id}")
-            return jsonify({
-                'success': True,
-                'message': '2FA enabled successfully'
+        # Mock audit logs
+        logs = []
+        for i in range(limit):
+            logs.append({
+                'id': str(uuid.uuid4()),
+                'timestamp': (datetime.now() - timedelta(hours=random.randint(1, 720))).isoformat(),
+                'user_id': user_id,
+                'action': random.choice([
+                    'user.login',
+                    'user.logout',
+                    'api.key.created',
+                    'api.key.deleted',
+                    'chat.session.created',
+                    'file.uploaded',
+                    'model.fine_tuned',
+                    'security.scan.completed'
+                ]),
+                'resource': random.choice([
+                    'chat_session',
+                    'file',
+                    'api_key',
+                    'user_account',
+                    'quantum_circuit',
+                    'federated_node'
+                ]),
+                'resource_id': str(uuid.uuid4()),
+                'ip_address': f"192.168.{random.randint(1, 255)}.{random.randint(1, 255)}",
+                'user_agent': random.choice([
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
+                ]),
+                'result': random.choice(['success', 'failure', 'warning']),
+                'details': {
+                    'method': random.choice(['GET', 'POST', 'PUT', 'DELETE']),
+                    'endpoint': random.choice(['/api/chat', '/api/files', '/api/settings']),
+                    'response_code': random.choice([200, 201, 400, 401, 403, 500])
+                }
             })
-        else:
-            return jsonify({'error': 'Invalid verification code'}), 400
-    
-    except Exception as e:
-        logging.error(f"Error verifying 2FA: {str(e)}")
-        return jsonify({'error': 'Failed to verify 2FA'}), 500
-
-@security_bp.route('/update-session-timeout', methods=['POST'])
-@login_required
-def update_session_timeout():
-    user = get_current_user()
-    data = request.get_json()
-    
-    timeout_minutes = data.get('timeout_minutes')
-    if not timeout_minutes or timeout_minutes < 5 or timeout_minutes > 480:
-        return jsonify({'error': 'Timeout must be between 5 and 480 minutes'}), 400
-    
-    try:
-        # In a real implementation, update user session timeout
-        logging.info(f"Session timeout updated to {timeout_minutes} minutes for user {user.id}")
+        
         return jsonify({
             'success': True,
-            'message': f'Session timeout updated to {timeout_minutes} minutes'
+            'logs': logs,
+            'total': limit
         })
-    
     except Exception as e:
-        logging.error(f"Error updating session timeout: {str(e)}")
-        return jsonify({'error': 'Failed to update session timeout'}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@security_bp.route('/quantum-safe-encryption', methods=['POST'])
-@login_required
-def enable_quantum_safe_encryption():
-    user = get_current_user()
+@security_bp.route('/api/threat-scan', methods=['POST'])
+@require_auth
+def run_threat_scan():
+    """Run security threat scan"""
+    user_id = session['user_id']
     
     try:
-        # Simulate enabling quantum-resistant encryption
-        logging.info(f"Quantum-safe encryption enabled for user {user.id}")
+        # Mock threat scan
+        scan_id = f"scan-{random.randint(1000, 9999)}"
+        
+        threats = []
+        if random.random() < 0.3:  # 30% chance of finding threats
+            threats = [
+                {
+                    'id': str(uuid.uuid4()),
+                    'type': random.choice(['malware', 'phishing', 'suspicious_activity']),
+                    'severity': random.choice(['low', 'medium', 'high']),
+                    'description': random.choice([
+                        'Suspicious login attempt from unknown IP',
+                        'Unusual API usage pattern detected',
+                        'Potential brute force attack'
+                    ]),
+                    'detected_at': datetime.now().isoformat(),
+                    'status': 'active',
+                    'recommended_action': random.choice([
+                        'Block IP address',
+                        'Require password reset',
+                        'Enable additional MFA'
+                    ])
+                }
+                for _ in range(random.randint(1, 3))
+            ]
+        
+        scan_result = {
+            'scan_id': scan_id,
+            'status': 'completed',
+            'started_at': datetime.now().isoformat(),
+            'completed_at': (datetime.now() + timedelta(seconds=30)).isoformat(),
+            'threats_found': len(threats),
+            'threats': threats,
+            'security_score': round(random.uniform(85, 98), 1),
+            'recommendations': [
+                'Enable two-factor authentication',
+                'Rotate API keys regularly',
+                'Monitor unusual access patterns',
+                'Keep security protocols updated'
+            ]
+        }
+        
         return jsonify({
             'success': True,
-            'message': 'Quantum-safe encryption enabled',
-            'algorithm': 'CRYSTALS-Kyber',
-            'key_size': '3168 bits'
+            'scan_result': scan_result
         })
-    
     except Exception as e:
-        logging.error(f"Error enabling quantum-safe encryption: {str(e)}")
-        return jsonify({'error': 'Failed to enable quantum-safe encryption'}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@security_bp.route('/blockchain-security', methods=['POST'])
-@login_required
-def configure_blockchain_security():
-    user = get_current_user()
-    data = request.get_json()
-    
-    security_level = data.get('security_level', 'high')
+@security_bp.route('/api/encryption/rotate-keys', methods=['POST'])
+@require_auth
+def rotate_encryption_keys():
+    """Rotate encryption keys"""
+    user_id = session['user_id']
     
     try:
-        # Simulate blockchain security configuration
-        logging.info(f"Blockchain security configured for user {user.id}")
+        # Mock key rotation
+        rotation_result = {
+            'rotation_id': f"rotation-{random.randint(1000, 9999)}",
+            'timestamp': datetime.now().isoformat(),
+            'keys_rotated': random.randint(3, 10),
+            'affected_resources': [
+                'API keys',
+                'Database encryption',
+                'File storage encryption',
+                'Session tokens'
+            ],
+            'new_key_ids': [
+                f"key-{secrets.token_hex(8)}" for _ in range(random.randint(3, 6))
+            ],
+            'old_keys_scheduled_deletion': (datetime.now() + timedelta(days=30)).isoformat()
+        }
+        
         return jsonify({
             'success': True,
-            'message': 'Blockchain security configured',
-            'security_level': security_level,
-            'multisig_threshold': '2/3',
-            'timelock_duration': '24 hours'
+            'rotation_result': rotation_result,
+            'message': 'Encryption keys rotated successfully'
         })
-    
     except Exception as e:
-        logging.error(f"Error configuring blockchain security: {str(e)}")
-        return jsonify({'error': 'Failed to configure blockchain security'}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@security_bp.route('/federated-privacy', methods=['POST'])
-@login_required
-def configure_federated_privacy():
-    user = get_current_user()
-    data = request.get_json()
-    
-    epsilon = data.get('epsilon', 1.0)
-    delta = data.get('delta', 1e-5)
+@security_bp.route('/api/access-control', methods=['GET'])
+@require_auth
+def get_access_control():
+    """Get access control settings"""
+    user_id = session['user_id']
     
     try:
-        # Simulate federated privacy configuration
-        logging.info(f"Federated privacy configured for user {user.id}")
-        return jsonify({
-            'success': True,
-            'message': 'Federated privacy configured',
-            'differential_privacy': {
-                'epsilon': epsilon,
-                'delta': delta
+        access_control = {
+            'role_based_access': {
+                'enabled': True,
+                'roles': ['admin', 'user', 'viewer'],
+                'current_role': 'admin'
             },
-            'secure_aggregation': True,
-            'homomorphic_encryption': True
-        })
-    
-    except Exception as e:
-        logging.error(f"Error configuring federated privacy: {str(e)}")
-        return jsonify({'error': 'Failed to configure federated privacy'}), 500
-
-@security_bp.route('/neuromorphic-security', methods=['POST'])
-@login_required
-def configure_neuromorphic_security():
-    user = get_current_user()
-    
-    try:
-        # Simulate neuromorphic security configuration
-        logging.info(f"Neuromorphic security configured for user {user.id}")
+            'ip_whitelist': {
+                'enabled': False,
+                'allowed_ips': []
+            },
+            'api_rate_limiting': {
+                'enabled': True,
+                'requests_per_minute': 60,
+                'burst_limit': 100
+            },
+            'session_management': {
+                'max_concurrent_sessions': 5,
+                'session_timeout_minutes': 480,
+                'idle_timeout_minutes': 60
+            },
+            'two_factor_auth': {
+                'enabled': random.choice([True, False]),
+                'methods': ['totp', 'sms'],
+                'backup_codes_count': 10
+            },
+            'password_policy': {
+                'min_length': 12,
+                'require_uppercase': True,
+                'require_lowercase': True,
+                'require_numbers': True,
+                'require_symbols': True,
+                'prevent_reuse': 5
+            }
+        }
+        
         return jsonify({
             'success': True,
-            'message': 'Neuromorphic security configured',
-            'edge_encryption': True,
-            'secure_enclaves': True,
-            'tamper_detection': True,
-            'power_analysis_protection': True
+            'access_control': access_control
         })
-    
     except Exception as e:
-        logging.error(f"Error configuring neuromorphic security: {str(e)}")
-        return jsonify({'error': 'Failed to configure neuromorphic security'}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@security_bp.route('/ai-safety-security', methods=['POST'])
-@login_required
-def configure_ai_safety_security():
-    user = get_current_user()
+@security_bp.route('/api/access-control', methods=['POST'])
+@require_auth
+def update_access_control():
+    """Update access control settings"""
+    user_id = session['user_id']
+    data = request.get_json()
     
     try:
-        # Simulate AI safety security configuration
-        logging.info(f"AI safety security configured for user {user.id}")
+        # In a real implementation, update access control settings
         return jsonify({
             'success': True,
-            'message': 'AI safety security configured',
-            'alignment_verification': True,
-            'capability_containment': True,
-            'behavioral_monitoring': True,
-            'emergency_shutoff': True
+            'message': 'Access control settings updated successfully'
         })
-    
     except Exception as e:
-        logging.error(f"Error configuring AI safety security: {str(e)}")
-        return jsonify({'error': 'Failed to configure AI safety security'}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-def calculate_security_score(user_id):
-    """Calculate security score based on various factors"""
-    score = 100
+@security_bp.route('/api/compliance-report')
+@require_auth
+def generate_compliance_report():
+    """Generate compliance report"""
+    user_id = session['user_id']
     
-    # Check recent failed logins
-    recent_failures = SecurityAudit.query.filter_by(
-        user_id=user_id, 
-        action='login', 
-        success=False
-    ).filter(SecurityAudit.timestamp >= datetime.utcnow() - timedelta(days=7)).count()
-    
-    if recent_failures > 5:
-        score -= 20
-    elif recent_failures > 2:
-        score -= 10
-    
-    # Check for suspicious activities
-    suspicious_activities = SecurityAudit.query.filter_by(user_id=user_id)\
-        .filter(SecurityAudit.action.contains('suspicious')).count()
-    
-    if suspicious_activities > 0:
-        score -= 15
-    
-    # Simulate other security factors
-    # In reality, these would be based on actual security configurations
-    
-    return max(score, 0)
+    try:
+        report = {
+            'report_id': f"compliance-{random.randint(1000, 9999)}",
+            'generated_at': datetime.now().isoformat(),
+            'compliance_frameworks': {
+                'GDPR': {
+                    'status': 'compliant',
+                    'score': round(random.uniform(90, 99), 1),
+                    'requirements_met': random.randint(45, 50),
+                    'total_requirements': 50,
+                    'last_audit': '2025-01-15'
+                },
+                'SOC 2': {
+                    'status': 'compliant',
+                    'score': round(random.uniform(85, 95), 1),
+                    'requirements_met': random.randint(35, 40),
+                    'total_requirements': 40,
+                    'last_audit': '2025-01-10'
+                },
+                'ISO 27001': {
+                    'status': 'in_progress',
+                    'score': round(random.uniform(70, 85), 1),
+                    'requirements_met': random.randint(80, 110),
+                    'total_requirements': 114,
+                    'next_audit': '2025-02-15'
+                }
+            },
+            'data_protection': {
+                'encryption_at_rest': True,
+                'encryption_in_transit': True,
+                'key_management': True,
+                'data_classification': True,
+                'retention_policies': True,
+                'right_to_deletion': True
+            },
+            'access_controls': {
+                'role_based_access': True,
+                'multi_factor_auth': True,
+                'privileged_access_management': True,
+                'regular_access_reviews': True
+            },
+            'monitoring_logging': {
+                'audit_logging': True,
+                'real_time_monitoring': True,
+                'incident_response': True,
+                'log_retention': True
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'report': report
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500

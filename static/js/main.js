@@ -1,735 +1,692 @@
-// Autogent Studio - Main JavaScript
+// Autogent Studio Main JavaScript
+
 class AutogentStudio {
     constructor() {
-        this.socket = null;
-        this.currentUser = null;
-        this.notifications = [];
-        this.isConnected = false;
         this.init();
+        this.bindEvents();
+        this.initializeFeatures();
     }
 
     init() {
-        this.initializeWebSocket();
-        this.setupEventListeners();
+        // Initialize global variables
+        this.sidebar = document.querySelector('.as-sidebar');
+        this.main = document.querySelector('.as-main');
+        this.currentUser = null;
+        this.socket = null;
+        this.notifications = [];
+        
+        // Initialize socket connection for real-time features
+        this.initSocket();
+        
+        // Load user data
         this.loadUserData();
-        this.initializeComponents();
+        
+        // Initialize tooltips and other UI components
+        this.initTooltips();
     }
 
-    // WebSocket Connection
-    initializeWebSocket() {
+    bindEvents() {
+        // Mobile sidebar toggle
+        const sidebarToggle = document.querySelector('.sidebar-toggle');
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', () => this.toggleSidebar());
+        }
+
+        // File upload drag and drop
+        document.addEventListener('dragover', (e) => this.handleDragOver(e));
+        document.addEventListener('drop', (e) => this.handleDrop(e));
+
+        // Form validation
+        const forms = document.querySelectorAll('form');
+        forms.forEach(form => {
+            form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+        });
+
+        // Navigation active state
+        this.updateActiveNavigation();
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e));
+
+        // Auto-save functionality
+        this.initAutoSave();
+    }
+
+    initSocket() {
         if (typeof io !== 'undefined') {
             this.socket = io();
             
             this.socket.on('connect', () => {
-                console.log('Connected to Autogent Studio');
-                this.isConnected = true;
-                this.updateConnectionStatus(true);
+                console.log('Connected to Autogent Studio server');
+                this.showNotification('Connected to server', 'success');
             });
 
             this.socket.on('disconnect', () => {
-                console.log('Disconnected from Autogent Studio');
-                this.isConnected = false;
-                this.updateConnectionStatus(false);
+                console.log('Disconnected from server');
+                this.showNotification('Connection lost', 'warning');
             });
 
-            this.socket.on('system_notification', (data) => {
-                this.showNotification(data.message, data.type, data.priority);
-            });
-
-            this.socket.on('error', (error) => {
-                console.error('WebSocket error:', error);
-                this.showNotification('Connection error occurred', 'danger');
+            this.socket.on('notification', (data) => {
+                this.showNotification(data.message, data.type);
             });
         }
     }
 
-    // Event Listeners
-    setupEventListeners() {
-        // Global keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                switch(e.key) {
-                    case 'k':
-                        e.preventDefault();
-                        this.openGlobalSearch();
-                        break;
-                    case 'n':
-                        e.preventDefault();
-                        this.createNewChat();
-                        break;
-                    case '/':
-                        e.preventDefault();
-                        this.openCommandPalette();
-                        break;
-                }
-            }
-        });
-
-        // Theme toggle
-        const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('click', () => {
-                this.toggleTheme();
-            });
-        }
-
-        // Global search
-        const searchInput = document.getElementById('globalSearch');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.debounce(this.performGlobalSearch.bind(this), 300)(e.target.value);
-            });
-        }
-
-        // Notification cleanup
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('notification-close')) {
-                this.closeNotification(e.target.closest('.notification'));
-            }
-        });
-
-        // Auto-save functionality
-        const autoSaveElements = document.querySelectorAll('[data-autosave]');
-        autoSaveElements.forEach(element => {
-            element.addEventListener('input', () => {
-                this.debounce(this.autoSave.bind(this), 1000)(element);
-            });
-        });
+    initializeFeatures() {
+        // Initialize feature-specific modules
+        this.initFileManager();
+        this.initModelSelector();
+        this.initQuantumInterface();
+        this.initNeuromorphicDashboard();
+        this.initSafetyMonitor();
+        this.initBlockchainWallet();
     }
 
-    // Load user data
-    loadUserData() {
-        const userDataElement = document.getElementById('userData');
-        if (userDataElement) {
-            try {
-                this.currentUser = JSON.parse(userDataElement.textContent);
-            } catch (e) {
-                console.error('Error parsing user data:', e);
-            }
+    toggleSidebar() {
+        if (this.sidebar) {
+            this.sidebar.classList.toggle('open');
         }
     }
 
-    // Initialize components
-    initializeComponents() {
-        this.initializeTooltips();
-        this.initializePopovers();
-        this.initializeScrollspy();
-        this.initializeFileUpload();
-        this.initializeDragDrop();
-        this.initializeCharts();
-        this.initializeProgressBars();
+    handleDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const dropZone = e.target.closest('.as-file-upload');
+        if (dropZone) {
+            dropZone.classList.add('dragover');
+        }
     }
 
-    // Initialize tooltips
-    initializeTooltips() {
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.map(tooltipTriggerEl => {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-    }
-
-    // Initialize popovers
-    initializePopovers() {
-        const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-        popoverTriggerList.map(popoverTriggerEl => {
-            return new bootstrap.Popover(popoverTriggerEl);
-        });
-    }
-
-    // Initialize scrollspy
-    initializeScrollspy() {
-        const scrollSpyElements = document.querySelectorAll('[data-bs-spy="scroll"]');
-        scrollSpyElements.forEach(element => {
-            new bootstrap.ScrollSpy(element);
-        });
-    }
-
-    // Initialize file upload
-    initializeFileUpload() {
-        const fileUploadAreas = document.querySelectorAll('.file-upload-area');
-        fileUploadAreas.forEach(area => {
-            this.setupFileUpload(area);
-        });
-    }
-
-    // Setup file upload
-    setupFileUpload(area) {
-        const input = area.querySelector('input[type="file"]');
-        if (!input) return;
-
-        // Click to upload
-        area.addEventListener('click', () => {
-            input.click();
-        });
-
-        // Drag and drop
-        area.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            area.classList.add('dragover');
-        });
-
-        area.addEventListener('dragleave', () => {
-            area.classList.remove('dragover');
-        });
-
-        area.addEventListener('drop', (e) => {
-            e.preventDefault();
-            area.classList.remove('dragover');
+    handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const dropZone = e.target.closest('.as-file-upload');
+        if (dropZone) {
+            dropZone.classList.remove('dragover');
             const files = e.dataTransfer.files;
-            this.handleFiles(files);
-        });
+            this.handleFileUpload(files, dropZone);
+        }
+    }
 
-        // File input change
-        input.addEventListener('change', (e) => {
-            this.handleFiles(e.target.files);
+    handleFileUpload(files, container) {
+        const maxSize = 100 * 1024 * 1024; // 100MB
+        const allowedTypes = [
+            'text/plain', 'application/pdf', 'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'image/jpeg', 'image/png', 'image/gif', 'audio/mpeg', 'video/mp4'
+        ];
+
+        Array.from(files).forEach((file, index) => {
+            if (file.size > maxSize) {
+                this.showNotification(`File ${file.name} is too large (max 100MB)`, 'error');
+                return;
+            }
+
+            if (!allowedTypes.includes(file.type)) {
+                this.showNotification(`File type ${file.type} is not supported`, 'error');
+                return;
+            }
+
+            this.uploadFile(file, container);
         });
     }
 
-    // Handle files
-    handleFiles(files) {
-        Array.from(files).forEach(file => {
-            this.uploadFile(file);
-        });
-    }
-
-    // Upload file
-    async uploadFile(file) {
+    async uploadFile(file, container) {
         const formData = new FormData();
         formData.append('file', file);
 
+        // Create progress element
+        const progressElement = this.createProgressElement(file.name);
+        container.appendChild(progressElement);
+
         try {
-            const response = await fetch('/upload', {
+            const response = await fetch('/files/upload', {
                 method: 'POST',
                 body: formData
             });
 
             if (response.ok) {
                 const result = await response.json();
-                this.showNotification(`File "${file.name}" uploaded successfully`, 'success');
-                this.updateFileList(result);
+                this.showNotification(`File ${file.name} uploaded successfully`, 'success');
+                this.updateFileList();
             } else {
                 throw new Error('Upload failed');
             }
         } catch (error) {
-            console.error('Upload error:', error);
-            this.showNotification(`Failed to upload "${file.name}"`, 'danger');
+            this.showNotification(`Failed to upload ${file.name}`, 'error');
+        } finally {
+            progressElement.remove();
         }
     }
 
-    // Initialize drag and drop
-    initializeDragDrop() {
-        const draggableElements = document.querySelectorAll('[draggable="true"]');
-        const dropZones = document.querySelectorAll('[data-drop-zone]');
-
-        draggableElements.forEach(element => {
-            element.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', element.id);
-                element.classList.add('dragging');
-            });
-
-            element.addEventListener('dragend', () => {
-                element.classList.remove('dragging');
-            });
-        });
-
-        dropZones.forEach(zone => {
-            zone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                zone.classList.add('drag-over');
-            });
-
-            zone.addEventListener('dragleave', () => {
-                zone.classList.remove('drag-over');
-            });
-
-            zone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                zone.classList.remove('drag-over');
-                const draggedId = e.dataTransfer.getData('text/plain');
-                const draggedElement = document.getElementById(draggedId);
-                if (draggedElement) {
-                    this.handleDrop(draggedElement, zone);
-                }
-            });
-        });
-    }
-
-    // Handle drop
-    handleDrop(draggedElement, dropZone) {
-        const dropType = dropZone.dataset.dropZone;
-        const draggedType = draggedElement.dataset.type;
-
-        console.log(`Dropped ${draggedType} onto ${dropType}`);
-        
-        // Emit drop event for specific handling
-        this.emit('drop', {
-            draggedElement,
-            dropZone,
-            draggedType,
-            dropType
-        });
-    }
-
-    // Initialize charts
-    initializeCharts() {
-        const chartElements = document.querySelectorAll('[data-chart]');
-        chartElements.forEach(element => {
-            this.createChart(element);
-        });
-    }
-
-    // Create chart
-    createChart(element) {
-        const chartType = element.dataset.chart;
-        const chartData = element.dataset.chartData;
-        
-        if (!chartData) return;
-
-        try {
-            const data = JSON.parse(chartData);
-            const ctx = element.getContext('2d');
-            
-            new Chart(ctx, {
-                type: chartType,
-                data: data,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                        },
-                        title: {
-                            display: true,
-                            text: element.dataset.chartTitle || 'Chart'
-                        }
-                    }
-                }
-            });
-        } catch (error) {
-            console.error('Chart creation error:', error);
-        }
-    }
-
-    // Initialize progress bars
-    initializeProgressBars() {
-        const progressBars = document.querySelectorAll('.progress-bar[data-progress]');
-        progressBars.forEach(bar => {
-            const targetProgress = parseInt(bar.dataset.progress);
-            this.animateProgressBar(bar, targetProgress);
-        });
-    }
-
-    // Animate progress bar
-    animateProgressBar(bar, targetProgress) {
-        let currentProgress = 0;
-        const increment = targetProgress / 100;
-        
-        const animate = () => {
-            currentProgress += increment;
-            if (currentProgress >= targetProgress) {
-                currentProgress = targetProgress;
-            }
-            
-            bar.style.width = currentProgress + '%';
-            bar.setAttribute('aria-valuenow', currentProgress);
-            
-            if (currentProgress < targetProgress) {
-                requestAnimationFrame(animate);
-            }
-        };
-        
-        requestAnimationFrame(animate);
-    }
-
-    // Notification system
-    showNotification(message, type = 'info', priority = 'normal') {
-        const notification = this.createNotification(message, type, priority);
-        const container = document.getElementById('notificationContainer');
-        
-        if (container) {
-            container.appendChild(notification);
-            
-            // Auto-remove after delay
-            const delay = priority === 'high' ? 8000 : 5000;
-            setTimeout(() => {
-                this.closeNotification(notification);
-            }, delay);
-        }
-    }
-
-    // Create notification
-    createNotification(message, type, priority) {
-        const notification = document.createElement('div');
-        notification.className = `notification alert alert-${type} alert-dismissible fade show`;
-        notification.setAttribute('role', 'alert');
-        
-        if (priority === 'high') {
-            notification.classList.add('notification-high-priority');
-        }
-        
-        notification.innerHTML = `
-            <div class="d-flex align-items-center">
-                <i class="fas ${this.getNotificationIcon(type)} me-2"></i>
-                <div class="flex-grow-1">${message}</div>
-                <button type="button" class="btn-close notification-close" aria-label="Close"></button>
+    createProgressElement(filename) {
+        const element = document.createElement('div');
+        element.className = 'as-file-item as-uploading';
+        element.innerHTML = `
+            <div class="as-file-icon">
+                <i class="fas fa-file"></i>
+            </div>
+            <div class="as-file-info">
+                <div class="as-file-name">${filename}</div>
+                <div class="as-progress">
+                    <div class="as-progress-bar" style="width: 0%"></div>
+                </div>
             </div>
         `;
+        return element;
+    }
+
+    handleFormSubmit(e) {
+        const form = e.target;
         
-        return notification;
-    }
+        // Validate form
+        if (!this.validateForm(form)) {
+            e.preventDefault();
+            return false;
+        }
 
-    // Get notification icon
-    getNotificationIcon(type) {
-        const icons = {
-            success: 'fa-check-circle',
-            danger: 'fa-exclamation-circle',
-            warning: 'fa-exclamation-triangle',
-            info: 'fa-info-circle'
-        };
-        return icons[type] || icons.info;
-    }
-
-    // Close notification
-    closeNotification(notification) {
-        if (notification) {
-            notification.classList.remove('show');
-            setTimeout(() => {
-                notification.remove();
-            }, 300);
+        // Show loading state
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton) {
+            this.setButtonLoading(submitButton, true);
         }
     }
 
-    // Connection status
-    updateConnectionStatus(connected) {
-        const statusElement = document.getElementById('connectionStatus');
-        if (statusElement) {
-            statusElement.className = connected ? 'status-online' : 'status-offline';
-            statusElement.innerHTML = connected ? 
-                '<i class="fas fa-circle"></i> Online' : 
-                '<i class="fas fa-circle"></i> Offline';
-        }
-    }
-
-    // Theme toggle
-    toggleTheme() {
-        const body = document.body;
-        const isDark = body.classList.contains('dark-theme');
+    validateForm(form) {
+        let isValid = true;
+        const requiredFields = form.querySelectorAll('[required]');
         
-        if (isDark) {
-            body.classList.remove('dark-theme');
-            localStorage.setItem('theme', 'light');
-        } else {
-            body.classList.add('dark-theme');
-            localStorage.setItem('theme', 'dark');
-        }
-    }
-
-    // Global search
-    openGlobalSearch() {
-        const searchModal = document.getElementById('globalSearchModal');
-        if (searchModal) {
-            const modal = new bootstrap.Modal(searchModal);
-            modal.show();
+        requiredFields.forEach(field => {
+            const value = field.value.trim();
+            const errorElement = field.parentNode.querySelector('.error-message');
             
-            // Focus on search input
-            setTimeout(() => {
-                const searchInput = searchModal.querySelector('input[type="search"]');
-                if (searchInput) {
-                    searchInput.focus();
-                }
-            }, 300);
-        }
-    }
-
-    // Perform global search
-    async performGlobalSearch(query) {
-        if (!query.trim()) return;
-
-        try {
-            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-            const results = await response.json();
-            this.displaySearchResults(results);
-        } catch (error) {
-            console.error('Search error:', error);
-        }
-    }
-
-    // Display search results
-    displaySearchResults(results) {
-        const resultsContainer = document.getElementById('searchResults');
-        if (!resultsContainer) return;
-
-        resultsContainer.innerHTML = '';
-
-        if (results.length === 0) {
-            resultsContainer.innerHTML = '<p class="text-muted">No results found</p>';
-            return;
-        }
-
-        results.forEach(result => {
-            const resultElement = document.createElement('div');
-            resultElement.className = 'search-result p-3 border-bottom';
-            resultElement.innerHTML = `
-                <h6><a href="${result.url}" class="text-decoration-none">${result.title}</a></h6>
-                <p class="text-muted mb-1">${result.description}</p>
-                <small class="text-muted">${result.type}</small>
-            `;
-            resultsContainer.appendChild(resultElement);
-        });
-    }
-
-    // Command palette
-    openCommandPalette() {
-        const commandModal = document.getElementById('commandPaletteModal');
-        if (commandModal) {
-            const modal = new bootstrap.Modal(commandModal);
-            modal.show();
-        }
-    }
-
-    // Create new chat
-    createNewChat() {
-        window.location.href = '/chat';
-    }
-
-    // Auto-save
-    autoSave(element) {
-        const data = {
-            field: element.name,
-            value: element.value,
-            timestamp: new Date().toISOString()
-        };
-
-        fetch('/api/autosave', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        }).catch(error => {
-            console.error('Auto-save error:', error);
-        });
-    }
-
-    // Utility functions
-    debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
-    // Event emitter
-    emit(event, data) {
-        const customEvent = new CustomEvent(event, { detail: data });
-        document.dispatchEvent(customEvent);
-    }
-
-    // API helper
-    async apiCall(endpoint, options = {}) {
-        const defaultOptions = {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        };
-
-        const mergedOptions = { ...defaultOptions, ...options };
-
-        try {
-            const response = await fetch(endpoint, mergedOptions);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            if (!value) {
+                this.showFieldError(field, 'This field is required');
+                isValid = false;
+            } else if (field.type === 'email' && !this.validateEmail(value)) {
+                this.showFieldError(field, 'Please enter a valid email address');
+                isValid = false;
+            } else if (field.type === 'password' && value.length < 8) {
+                this.showFieldError(field, 'Password must be at least 8 characters');
+                isValid = false;
+            } else {
+                this.clearFieldError(field);
             }
-            
-            return await response.json();
-        } catch (error) {
-            console.error('API call error:', error);
-            throw error;
-        }
-    }
-
-    // Format date
-    formatDate(date, format = 'short') {
-        const d = new Date(date);
-        
-        if (format === 'short') {
-            return d.toLocaleDateString();
-        } else if (format === 'long') {
-            return d.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } else if (format === 'relative') {
-            return this.getRelativeTime(d);
-        }
-        
-        return d.toLocaleDateString();
-    }
-
-    // Get relative time
-    getRelativeTime(date) {
-        const now = new Date();
-        const diff = now - date;
-        const seconds = Math.floor(diff / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const hours = Math.floor(minutes / 60);
-        const days = Math.floor(hours / 24);
-
-        if (days > 0) {
-            return `${days} day${days > 1 ? 's' : ''} ago`;
-        } else if (hours > 0) {
-            return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-        } else if (minutes > 0) {
-            return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-        } else {
-            return 'Just now';
-        }
-    }
-
-    // Escape HTML
-    escapeHtml(text) {
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, m => map[m]);
-    }
-
-    // Generate UUID
-    generateUUID() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            const r = Math.random() * 16 | 0;
-            const v = c == 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
         });
+
+        return isValid;
     }
 
-    // Copy to clipboard
-    async copyToClipboard(text) {
-        try {
-            await navigator.clipboard.writeText(text);
-            this.showNotification('Copied to clipboard', 'success');
-        } catch (error) {
-            console.error('Copy error:', error);
-            this.showNotification('Failed to copy to clipboard', 'danger');
-        }
-    }
-
-    // Download file
-    downloadFile(url, filename) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    }
-
-    // Get file size
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    // Validate email
     validateEmail(email) {
         const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return re.test(email);
     }
 
-    // Validate URL
-    validateUrl(url) {
-        try {
-            new URL(url);
-            return true;
-        } catch {
-            return false;
+    showFieldError(field, message) {
+        this.clearFieldError(field);
+        
+        const errorElement = document.createElement('div');
+        errorElement.className = 'error-message text-danger mt-1';
+        errorElement.textContent = message;
+        
+        field.parentNode.appendChild(errorElement);
+        field.classList.add('is-invalid');
+    }
+
+    clearFieldError(field) {
+        const errorElement = field.parentNode.querySelector('.error-message');
+        if (errorElement) {
+            errorElement.remove();
+        }
+        field.classList.remove('is-invalid');
+    }
+
+    setButtonLoading(button, loading) {
+        if (loading) {
+            button.disabled = true;
+            button.innerHTML = '<span class="as-loading"></span> Loading...';
+        } else {
+            button.disabled = false;
+            button.innerHTML = button.dataset.originalText || 'Submit';
         }
     }
 
-    // Storage helpers
-    setStorage(key, value) {
-        try {
-            localStorage.setItem(key, JSON.stringify(value));
-        } catch (error) {
-            console.error('Storage error:', error);
+    updateActiveNavigation() {
+        const currentPath = window.location.pathname;
+        const navLinks = document.querySelectorAll('.as-nav-link');
+        
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            
+            const href = link.getAttribute('href');
+            if (href === currentPath || (href !== '/' && currentPath.startsWith(href))) {
+                link.classList.add('active');
+            }
+        });
+    }
+
+    handleKeyboardShortcuts(e) {
+        // Ctrl/Cmd + K for search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            this.openSearch();
+        }
+        
+        // Ctrl/Cmd + N for new chat
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+            e.preventDefault();
+            window.location.href = '/chat';
+        }
+        
+        // Escape to close modals
+        if (e.key === 'Escape') {
+            this.closeModals();
         }
     }
 
-    getStorage(key) {
+    openSearch() {
+        // Implementation for global search
+        console.log('Opening search...');
+    }
+
+    closeModals() {
+        const modals = document.querySelectorAll('.modal.show');
+        modals.forEach(modal => {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        });
+    }
+
+    initAutoSave() {
+        const autoSaveFields = document.querySelectorAll('[data-autosave]');
+        
+        autoSaveFields.forEach(field => {
+            let timeout;
+            
+            field.addEventListener('input', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    this.autoSave(field);
+                }, 2000); // Save after 2 seconds of inactivity
+            });
+        });
+    }
+
+    async autoSave(field) {
+        const url = field.dataset.autosave;
+        const data = { [field.name]: field.value };
+        
         try {
-            const item = localStorage.getItem(key);
-            return item ? JSON.parse(item) : null;
+            await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            this.showAutoSaveIndicator(field);
         } catch (error) {
-            console.error('Storage error:', error);
-            return null;
+            console.error('Auto-save failed:', error);
         }
     }
 
-    removeStorage(key) {
+    showAutoSaveIndicator(field) {
+        const indicator = document.createElement('span');
+        indicator.className = 'auto-save-indicator text-success';
+        indicator.innerHTML = '<i class="fas fa-check"></i> Saved';
+        
+        field.parentNode.appendChild(indicator);
+        
+        setTimeout(() => {
+            indicator.remove();
+        }, 2000);
+    }
+
+    loadUserData() {
+        // Load user preferences and settings
+        const savedTheme = localStorage.getItem('as-theme');
+        if (savedTheme) {
+            this.setTheme(savedTheme);
+        }
+
+        const savedSidebarState = localStorage.getItem('as-sidebar-collapsed');
+        if (savedSidebarState === 'true') {
+            this.sidebar?.classList.add('collapsed');
+        }
+    }
+
+    setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('as-theme', theme);
+    }
+
+    showNotification(message, type = 'info', duration = 5000) {
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type} as-fade-in`;
+        notification.innerHTML = `
+            <div class="notification-content">
+                <span class="notification-message">${message}</span>
+                <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+
+        // Add to notifications container or create one
+        let container = document.querySelector('.notifications-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'notifications-container';
+            document.body.appendChild(container);
+        }
+
+        container.appendChild(notification);
+
+        // Auto-remove after duration
+        if (duration > 0) {
+            setTimeout(() => {
+                notification.remove();
+            }, duration);
+        }
+
+        // Add to notifications array
+        this.notifications.push({
+            message,
+            type,
+            timestamp: new Date()
+        });
+    }
+
+    initTooltips() {
+        // Initialize Bootstrap tooltips if available
+        if (typeof bootstrap !== 'undefined') {
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        }
+    }
+
+    // Feature-specific initialization methods
+    initFileManager() {
+        const fileUploadAreas = document.querySelectorAll('.as-file-upload');
+        fileUploadAreas.forEach(area => {
+            area.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.multiple = true;
+                input.onchange = (e) => this.handleFileUpload(e.target.files, area);
+                input.click();
+            });
+        });
+    }
+
+    initModelSelector() {
+        const modelSelectors = document.querySelectorAll('.model-selector');
+        modelSelectors.forEach(selector => {
+            selector.addEventListener('change', (e) => {
+                this.updateModelConfiguration(e.target.value);
+            });
+        });
+    }
+
+    async updateModelConfiguration(modelName) {
         try {
-            localStorage.removeItem(key);
+            const response = await fetch('/api/models/config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ model: modelName })
+            });
+
+            if (response.ok) {
+                this.showNotification(`Model updated to ${modelName}`, 'success');
+            }
         } catch (error) {
-            console.error('Storage error:', error);
+            this.showNotification('Failed to update model', 'error');
+        }
+    }
+
+    initQuantumInterface() {
+        // Initialize quantum circuit visualization
+        const quantumCanvas = document.querySelector('#quantum-canvas');
+        if (quantumCanvas) {
+            this.setupQuantumCircuitEditor(quantumCanvas);
+        }
+    }
+
+    setupQuantumCircuitEditor(canvas) {
+        // Placeholder for quantum circuit editor
+        console.log('Initializing quantum circuit editor...');
+    }
+
+    initNeuromorphicDashboard() {
+        // Initialize neuromorphic computing visualizations
+        const neuromorphicContainers = document.querySelectorAll('.neuromorphic-viz');
+        neuromorphicContainers.forEach(container => {
+            this.createNeuromorphicVisualization(container);
+        });
+    }
+
+    createNeuromorphicVisualization(container) {
+        // Create animated neural network visualization
+        container.innerHTML = `
+            <div class="neural-network">
+                <div class="neuron-layer input-layer">
+                    ${Array(4).fill(0).map(() => '<div class="as-neuron"></div>').join('')}
+                </div>
+                <div class="neuron-layer hidden-layer">
+                    ${Array(6).fill(0).map(() => '<div class="as-neuron"></div>').join('')}
+                </div>
+                <div class="neuron-layer output-layer">
+                    ${Array(2).fill(0).map(() => '<div class="as-neuron"></div>').join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    initSafetyMonitor() {
+        // Initialize AI safety monitoring
+        this.startSafetyMonitoring();
+    }
+
+    async startSafetyMonitoring() {
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/safety/status');
+                const data = await response.json();
+                this.updateSafetyStatus(data);
+            } catch (error) {
+                console.error('Safety monitoring failed:', error);
+            }
+        }, 30000); // Check every 30 seconds
+    }
+
+    updateSafetyStatus(data) {
+        const statusElement = document.querySelector('.safety-status');
+        if (statusElement) {
+            statusElement.className = `safety-status ${data.status}`;
+            statusElement.textContent = `Safety: ${data.status.toUpperCase()}`;
+        }
+    }
+
+    initBlockchainWallet() {
+        const walletButtons = document.querySelectorAll('.wallet-connect-btn');
+        walletButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                this.connectWallet(button.dataset.provider);
+            });
+        });
+    }
+
+    async connectWallet(provider) {
+        try {
+            if (typeof window.ethereum !== 'undefined' && provider === 'metamask') {
+                const accounts = await window.ethereum.request({
+                    method: 'eth_requestAccounts'
+                });
+                
+                if (accounts.length > 0) {
+                    this.showNotification(`Connected to ${accounts[0]}`, 'success');
+                    this.updateWalletStatus(accounts[0]);
+                }
+            } else {
+                this.showNotification('MetaMask not detected', 'warning');
+            }
+        } catch (error) {
+            this.showNotification('Failed to connect wallet', 'error');
+        }
+    }
+
+    updateWalletStatus(address) {
+        const walletStatus = document.querySelector('.wallet-status');
+        if (walletStatus) {
+            walletStatus.innerHTML = `
+                <i class="fas fa-wallet"></i>
+                ${address.substring(0, 6)}...${address.substring(address.length - 4)}
+            `;
+        }
+    }
+
+    async updateFileList() {
+        try {
+            const response = await fetch('/api/files');
+            const files = await response.json();
+            
+            const fileList = document.querySelector('.file-list');
+            if (fileList) {
+                fileList.innerHTML = files.map(file => `
+                    <div class="as-file-item">
+                        <div class="as-file-icon">
+                            <i class="fas fa-file"></i>
+                        </div>
+                        <div class="as-file-info">
+                            <div class="as-file-name">${file.original_filename}</div>
+                            <div class="as-file-meta">${this.formatFileSize(file.file_size)} • ${this.formatDate(file.created_at)}</div>
+                        </div>
+                        <div class="as-file-actions">
+                            <button class="as-btn as-btn-sm" onclick="autogentStudio.previewFile(${file.id})">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="as-btn as-btn-sm as-btn-error" onclick="autogentStudio.deleteFile(${file.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        } catch (error) {
+            console.error('Failed to update file list:', error);
+        }
+    }
+
+    formatFileSize(bytes) {
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        if (bytes === 0) return '0 B';
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString();
+    }
+
+    async previewFile(fileId) {
+        try {
+            const response = await fetch(`/api/files/${fileId}/preview`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showFilePreview(data);
+            } else {
+                this.showNotification('Failed to preview file', 'error');
+            }
+        } catch (error) {
+            this.showNotification('Failed to preview file', 'error');
+        }
+    }
+
+    showFilePreview(data) {
+        // Create modal for file preview
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content as-card">
+                    <div class="modal-header">
+                        <h5 class="modal-title">File Preview</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        ${this.renderFilePreview(data)}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        const modalInstance = new bootstrap.Modal(modal);
+        modalInstance.show();
+        
+        modal.addEventListener('hidden.bs.modal', () => {
+            modal.remove();
+        });
+    }
+
+    renderFilePreview(data) {
+        switch (data.type) {
+            case 'text':
+                return `<pre class="as-code">${data.content}</pre>`;
+            case 'image':
+                return `<img src="${data.url}" class="img-fluid" alt="File preview">`;
+            case 'metadata':
+                return `
+                    <div class="file-metadata">
+                        <p><strong>Filename:</strong> ${data.info.filename}</p>
+                        <p><strong>Size:</strong> ${this.formatFileSize(data.info.size)}</p>
+                        <p><strong>Type:</strong> ${data.info.type}</p>
+                        <p><strong>Processed:</strong> ${data.info.processed ? 'Yes' : 'No'}</p>
+                    </div>
+                `;
+            default:
+                return '<p>Preview not available for this file type.</p>';
+        }
+    }
+
+    async deleteFile(fileId) {
+        if (!confirm('Are you sure you want to delete this file?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/files/${fileId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                this.showNotification('File deleted successfully', 'success');
+                this.updateFileList();
+            } else {
+                this.showNotification('Failed to delete file', 'error');
+            }
+        } catch (error) {
+            this.showNotification('Failed to delete file', 'error');
         }
     }
 }
 
-// Initialize Autogent Studio
-document.addEventListener('DOMContentLoaded', function() {
+// Initialize Autogent Studio when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
     window.autogentStudio = new AutogentStudio();
-    
-    // Apply saved theme
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-theme');
-    }
 });
-
-// Global utility functions
-function showNotification(message, type = 'info', priority = 'normal') {
-    if (window.autogentStudio) {
-        window.autogentStudio.showNotification(message, type, priority);
-    }
-}
-
-function formatDate(date, format = 'short') {
-    if (window.autogentStudio) {
-        return window.autogentStudio.formatDate(date, format);
-    }
-    return new Date(date).toLocaleDateString();
-}
-
-function copyToClipboard(text) {
-    if (window.autogentStudio) {
-        window.autogentStudio.copyToClipboard(text);
-    }
-}
-
-function downloadFile(url, filename) {
-    if (window.autogentStudio) {
-        window.autogentStudio.downloadFile(url, filename);
-    }
-}
 
 // Export for module usage
 if (typeof module !== 'undefined' && module.exports) {

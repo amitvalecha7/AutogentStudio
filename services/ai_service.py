@@ -1,255 +1,467 @@
 import os
+import json
+import requests
+from typing import Dict, List, Any, Optional, Generator
 import openai
 import anthropic
-from typing import List, Dict, Any
-from models import Chat, Message, APIKey
-from utils.encryption import decrypt_api_key
+from anthropic import Anthropic
+import google.generativeai as genai
+import cohere
+
+# <important_code_snippet_instructions>
+# The newest OpenAI model is "gpt-4o", not older versions
+# The newest Anthropic model is "claude-sonnet-4-20250514", not older models
+# When copying code from this service, ensure you use the latest models
+# </important_code_snippet_instructions>
 
 class AIService:
     def __init__(self):
-        # The newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-        # do not change this unless explicitly requested by the user
-        self.default_openai_model = "gpt-4o"
+        # Initialize AI service clients
+        self.openai_client = None
+        self.anthropic_client = None
+        self.google_client = None
+        self.cohere_client = None
         
-        # The newest Anthropic model is "claude-sonnet-4-20250514", not "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022" nor "claude-3-sonnet-20240229". 
-        # If the user doesn't specify a model, always prefer using "claude-sonnet-4-20250514" as it is the latest model.
-        self.default_anthropic_model = "claude-sonnet-4-20250514"
+        # Initialize OpenAI
+        openai_key = os.environ.get('OPENAI_API_KEY')
+        if openai_key:
+            self.openai_client = openai.OpenAI(api_key=openai_key)
+        
+        # Initialize Anthropic - newest model is "claude-sonnet-4-20250514"
+        anthropic_key = os.environ.get('ANTHROPIC_API_KEY')
+        if anthropic_key:
+            self.anthropic_client = Anthropic(api_key=anthropic_key)
+        
+        # Initialize Google AI
+        google_key = os.environ.get('GOOGLE_API_KEY')
+        if google_key:
+            genai.configure(api_key=google_key)
+            self.google_client = genai.GenerativeModel('gemini-pro')
+        
+        # Initialize Cohere
+        cohere_key = os.environ.get('COHERE_API_KEY')
+        if cohere_key:
+            self.cohere_client = cohere.Client(cohere_key)
     
-    def get_openai_client(self, user_id: str):
-        """Get OpenAI client with user's API key"""
-        api_key_record = APIKey.query.filter_by(user_id=user_id, provider='openai', is_active=True).first()
+    def chat_completion(self, messages: List[Dict], provider: str = 'openai', 
+                       model: str = None, settings: Dict = None) -> Dict:
+        """Generate chat completion using specified AI provider"""
         
-        if not api_key_record:
-            # Fallback to environment variable
-            api_key = os.environ.get('OPENAI_API_KEY')
-            if not api_key:
-                raise ValueError("OpenAI API key not configured")
-        else:
-            api_key = decrypt_api_key(api_key_record.encrypted_key)
+        if not settings:
+            settings = {}
         
-        return openai.OpenAI(api_key=api_key)
-    
-    def get_anthropic_client(self, user_id: str):
-        """Get Anthropic client with user's API key"""
-        api_key_record = APIKey.query.filter_by(user_id=user_id, provider='anthropic', is_active=True).first()
-        
-        if not api_key_record:
-            # Fallback to environment variable
-            api_key = os.environ.get('ANTHROPIC_API_KEY')
-            if not api_key:
-                raise ValueError("Anthropic API key not configured")
-        else:
-            api_key = decrypt_api_key(api_key_record.encrypted_key)
-        
-        return anthropic.Anthropic(api_key=api_key)
-    
-    def get_chat_response(self, chat: Chat, message: str) -> str:
-        """Get AI response for chat message"""
         try:
-            # Get conversation history
-            messages = Message.query.filter_by(chat_id=chat.id).order_by(Message.created_at.asc()).all()
-            
-            # Build conversation context
-            conversation = []
-            
-            # Add system prompt if exists
-            if chat.system_prompt:
-                conversation.append({"role": "system", "content": chat.system_prompt})
-            
-            # Add message history
-            for msg in messages:
-                conversation.append({"role": msg.role, "content": msg.content})
-            
-            # Add current message
-            conversation.append({"role": "user", "content": message})
-            
-            # Determine provider based on model
-            if chat.model.startswith('gpt-') or chat.model.startswith('o1-'):
-                return self._get_openai_response(chat, conversation)
-            elif chat.model.startswith('claude-'):
-                return self._get_anthropic_response(chat, conversation)
+            if provider == 'openai':
+                return self._openai_chat_completion(messages, model or 'gpt-4o', settings)
+            elif provider == 'anthropic':
+                return self._anthropic_chat_completion(messages, model or 'claude-sonnet-4-20250514', settings)
+            elif provider == 'google':
+                return self._google_chat_completion(messages, model or 'gemini-pro', settings)
+            elif provider == 'cohere':
+                return self._cohere_chat_completion(messages, model or 'command', settings)
             else:
-                # Default to OpenAI
-                return self._get_openai_response(chat, conversation)
-                
-        except Exception as e:
-            return f"Error: {str(e)}"
-    
-    def _get_openai_response(self, chat: Chat, conversation: List[Dict[str, str]]) -> str:
-        """Get response from OpenAI"""
-        client = self.get_openai_client(chat.user_id)
+                raise ValueError(f"Unsupported provider: {provider}")
         
-        response = client.chat.completions.create(
-            model=chat.model or self.default_openai_model,
-            messages=conversation,
-            temperature=chat.temperature or 0.7,
-            max_tokens=chat.max_tokens or 2048
+        except Exception as e:
+            raise Exception(f"AI service error ({provider}): {str(e)}")
+    
+    def _openai_chat_completion(self, messages: List[Dict], model: str, settings: Dict) -> Dict:
+        """OpenAI chat completion - newest model is "gpt-4o" """
+        if not self.openai_client:
+            raise Exception("OpenAI client not initialized")
+        
+        response = self.openai_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=settings.get('temperature', 0.7),
+            max_tokens=settings.get('max_tokens', 2048),
+            top_p=settings.get('top_p', 1.0),
+            frequency_penalty=settings.get('frequency_penalty', 0.0),
+            presence_penalty=settings.get('presence_penalty', 0.0)
+        )
+        
+        return {
+            'content': response.choices[0].message.content,
+            'model': model,
+            'tokens_used': response.usage.total_tokens,
+            'cost': self._calculate_openai_cost(model, response.usage)
+        }
+    
+    def _anthropic_chat_completion(self, messages: List[Dict], model: str, settings: Dict) -> Dict:
+        """Anthropic chat completion - newest model is "claude-sonnet-4-20250514" """
+        if not self.anthropic_client:
+            raise Exception("Anthropic client not initialized")
+        
+        # Convert messages format
+        system_message = ""
+        conversation_messages = []
+        
+        for msg in messages:
+            if msg['role'] == 'system':
+                system_message = msg['content']
+            else:
+                conversation_messages.append({
+                    'role': msg['role'],
+                    'content': msg['content']
+                })
+        
+        response = self.anthropic_client.messages.create(
+            model=model,
+            max_tokens=settings.get('max_tokens', 2048),
+            temperature=settings.get('temperature', 0.7),
+            system=system_message if system_message else None,
+            messages=conversation_messages
+        )
+        
+        return {
+            'content': response.content[0].text,
+            'model': model,
+            'tokens_used': response.usage.input_tokens + response.usage.output_tokens,
+            'cost': self._calculate_anthropic_cost(model, response.usage)
+        }
+    
+    def _google_chat_completion(self, messages: List[Dict], model: str, settings: Dict) -> Dict:
+        """Google AI chat completion"""
+        if not self.google_client:
+            raise Exception("Google AI client not initialized")
+        
+        # Convert messages to Google format
+        prompt = ""
+        for msg in messages:
+            if msg['role'] == 'system':
+                prompt += f"System: {msg['content']}\n"
+            elif msg['role'] == 'user':
+                prompt += f"Human: {msg['content']}\n"
+            elif msg['role'] == 'assistant':
+                prompt += f"Assistant: {msg['content']}\n"
+        
+        prompt += "Assistant:"
+        
+        response = self.google_client.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=settings.get('temperature', 0.7),
+                max_output_tokens=settings.get('max_tokens', 2048),
+                top_p=settings.get('top_p', 1.0)
+            )
+        )
+        
+        return {
+            'content': response.text,
+            'model': model,
+            'tokens_used': response.usage_metadata.total_token_count if hasattr(response, 'usage_metadata') else 0,
+            'cost': 0.0  # Google AI pricing varies
+        }
+    
+    def _cohere_chat_completion(self, messages: List[Dict], model: str, settings: Dict) -> Dict:
+        """Cohere chat completion"""
+        if not self.cohere_client:
+            raise Exception("Cohere client not initialized")
+        
+        # Convert messages to Cohere chat format
+        chat_history = []
+        current_message = ""
+        
+        for msg in messages[:-1]:  # All but last message
+            if msg['role'] == 'user':
+                chat_history.append({"role": "USER", "message": msg['content']})
+            elif msg['role'] == 'assistant':
+                chat_history.append({"role": "CHATBOT", "message": msg['content']})
+        
+        # Last message should be the current user message
+        if messages and messages[-1]['role'] == 'user':
+            current_message = messages[-1]['content']
+        
+        response = self.cohere_client.chat(
+            model=model,
+            message=current_message,
+            chat_history=chat_history,
+            temperature=settings.get('temperature', 0.7),
+            max_tokens=settings.get('max_tokens', 2048)
+        )
+        
+        return {
+            'content': response.text,
+            'model': model,
+            'tokens_used': response.meta.billed_units.input_tokens + response.meta.billed_units.output_tokens if hasattr(response, 'meta') else 0,
+            'cost': 0.0  # Would need Cohere pricing calculation
+        }
+    
+    def stream_chat_completion(self, messages: List[Dict], provider: str = 'openai', 
+                              model: str = None, settings: Dict = None) -> Generator[Dict, None, None]:
+        """Stream chat completion for real-time responses"""
+        
+        if not settings:
+            settings = {}
+        
+        try:
+            if provider == 'openai':
+                yield from self._openai_stream_completion(messages, model or 'gpt-4o', settings)
+            elif provider == 'anthropic':
+                yield from self._anthropic_stream_completion(messages, model or 'claude-sonnet-4-20250514', settings)
+            else:
+                # For non-streaming providers, yield the complete response
+                response = self.chat_completion(messages, provider, model, settings)
+                yield {'content': response['content'], 'done': True}
+        
+        except Exception as e:
+            yield {'error': f"Streaming error ({provider}): {str(e)}"}
+    
+    def _openai_stream_completion(self, messages: List[Dict], model: str, settings: Dict) -> Generator[Dict, None, None]:
+        """OpenAI streaming completion"""
+        if not self.openai_client:
+            raise Exception("OpenAI client not initialized")
+        
+        stream = self.openai_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=settings.get('temperature', 0.7),
+            max_tokens=settings.get('max_tokens', 2048),
+            stream=True
+        )
+        
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                yield {
+                    'content': chunk.choices[0].delta.content,
+                    'done': False
+                }
+        
+        yield {'done': True}
+    
+    def _anthropic_stream_completion(self, messages: List[Dict], model: str, settings: Dict) -> Generator[Dict, None, None]:
+        """Anthropic streaming completion"""
+        if not self.anthropic_client:
+            raise Exception("Anthropic client not initialized")
+        
+        # Convert messages format
+        system_message = ""
+        conversation_messages = []
+        
+        for msg in messages:
+            if msg['role'] == 'system':
+                system_message = msg['content']
+            else:
+                conversation_messages.append({
+                    'role': msg['role'],
+                    'content': msg['content']
+                })
+        
+        with self.anthropic_client.messages.stream(
+            model=model,
+            max_tokens=settings.get('max_tokens', 2048),
+            temperature=settings.get('temperature', 0.7),
+            system=system_message if system_message else None,
+            messages=conversation_messages
+        ) as stream:
+            for text in stream.text_stream:
+                yield {
+                    'content': text,
+                    'done': False
+                }
+        
+        yield {'done': True}
+    
+    def generate_image_openai(self, prompt: str, size: str = "1024x1024", 
+                             quality: str = "standard", n: int = 1) -> Dict:
+        """Generate image using OpenAI DALL-E"""
+        if not self.openai_client:
+            raise Exception("OpenAI client not initialized")
+        
+        response = self.openai_client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size=size,
+            quality=quality,
+            n=min(n, 1)  # DALL-E 3 only supports n=1
+        )
+        
+        return {
+            'images': [{'url': image.url} for image in response.data],
+            'model': 'dall-e-3',
+            'prompt': prompt
+        }
+    
+    def generate_image_midjourney(self, prompt: str, aspect_ratio: str = "1:1", style: str = "natural") -> Dict:
+        """Generate image using Midjourney API (placeholder - would need actual API)"""
+        # This would integrate with actual Midjourney API
+        return {
+            'images': [{'url': f'https://via.placeholder.com/1024x1024.png?text=Midjourney+Image'}],
+            'model': 'midjourney',
+            'prompt': prompt,
+            'note': 'Midjourney integration placeholder - requires actual API setup'
+        }
+    
+    def generate_image_pollinations(self, prompt: str, width: int = 1024, height: int = 1024) -> Dict:
+        """Generate image using Pollinations AI (free service)"""
+        try:
+            # Pollinations.ai free image generation
+            encoded_prompt = requests.utils.quote(prompt)
+            image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}"
+            
+            return {
+                'images': [{'url': image_url}],
+                'model': 'pollinations',
+                'prompt': prompt
+            }
+        except Exception as e:
+            raise Exception(f"Pollinations image generation error: {str(e)}")
+    
+    def analyze_image(self, base64_image: str, prompt: str = None) -> str:
+        """Analyze image using vision-capable models"""
+        if not self.openai_client:
+            raise Exception("OpenAI client not initialized")
+        
+        if not prompt:
+            prompt = "Analyze this image in detail and describe its key elements, context, and any notable aspects."
+        
+        response = self.openai_client.chat.completions.create(
+            model="gpt-4o",  # Vision-capable model
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=500
         )
         
         return response.choices[0].message.content
     
-    def _get_anthropic_response(self, chat: Chat, conversation: List[Dict[str, str]]) -> str:
-        """Get response from Anthropic"""
-        client = self.get_anthropic_client(chat.user_id)
-        
-        # Convert conversation format for Anthropic
-        anthropic_messages = []
-        system_prompt = None
-        
-        for msg in conversation:
-            if msg["role"] == "system":
-                system_prompt = msg["content"]
-            else:
-                anthropic_messages.append(msg)
-        
-        kwargs = {
-            "model": chat.model or self.default_anthropic_model,
-            "messages": anthropic_messages,
-            "max_tokens": chat.max_tokens or 2048,
-            "temperature": chat.temperature or 0.7
+    def upscale_image(self, image_data: str) -> Dict:
+        """Upscale image using AI (placeholder for actual upscaling service)"""
+        return {
+            'image_url': 'https://via.placeholder.com/2048x2048.png?text=Upscaled+Image',
+            'note': 'Image upscaling placeholder - requires actual upscaling service'
+        }
+    
+    def denoise_image(self, image_data: str) -> Dict:
+        """Denoise image (placeholder)"""
+        return {
+            'image_url': 'https://via.placeholder.com/1024x1024.png?text=Denoised+Image',
+            'note': 'Image denoising placeholder'
+        }
+    
+    def colorize_image(self, image_data: str) -> Dict:
+        """Colorize black and white image (placeholder)"""
+        return {
+            'image_url': 'https://via.placeholder.com/1024x1024.png?text=Colorized+Image',
+            'note': 'Image colorization placeholder'
+        }
+    
+    def detect_objects(self, image_data: str) -> Dict:
+        """Detect objects in image"""
+        analysis = self.analyze_image(image_data, "Identify and list all objects visible in this image.")
+        return {
+            'objects': analysis,
+            'note': 'Object detection using vision model analysis'
+        }
+    
+    def extract_text_from_image(self, image_data: str) -> Dict:
+        """Extract text from image (OCR)"""
+        analysis = self.analyze_image(image_data, "Extract and transcribe all text visible in this image.")
+        return {
+            'text': analysis,
+            'note': 'Text extraction using vision model'
+        }
+    
+    def create_image_variations(self, image_data: str, n: int = 3, strength: float = 0.7) -> Dict:
+        """Create variations of an image"""
+        # This would use actual image variation APIs
+        return {
+            'images': [
+                {'url': f'https://via.placeholder.com/1024x1024.png?text=Variation+{i+1}'}
+                for i in range(n)
+            ],
+            'note': 'Image variations placeholder'
+        }
+    
+    def edit_image(self, image_data: str, mask_data: str = None, prompt: str = "") -> Dict:
+        """Edit image with AI (inpainting/outpainting)"""
+        return {
+            'image_url': 'https://via.placeholder.com/1024x1024.png?text=Edited+Image',
+            'prompt': prompt,
+            'note': 'Image editing placeholder'
+        }
+    
+    def _calculate_openai_cost(self, model: str, usage) -> float:
+        """Calculate OpenAI API costs"""
+        # Pricing as of 2024 (would need to be updated with current pricing)
+        pricing = {
+            'gpt-4o': {'input': 0.005, 'output': 0.015},  # per 1K tokens
+            'gpt-4o-mini': {'input': 0.00015, 'output': 0.0006},
+            'gpt-3.5-turbo': {'input': 0.0005, 'output': 0.0015}
         }
         
-        if system_prompt:
-            kwargs["system"] = system_prompt
+        if model not in pricing:
+            return 0.0
         
-        response = client.messages.create(**kwargs)
+        input_cost = (usage.prompt_tokens / 1000) * pricing[model]['input']
+        output_cost = (usage.completion_tokens / 1000) * pricing[model]['output']
         
-        return response.content[0].text
+        return input_cost + output_cost
     
-    def generate_image(self, user_id: str, prompt: str, model: str = "dall-e-3") -> Dict[str, Any]:
-        """Generate image using DALL-E"""
-        try:
-            client = self.get_openai_client(user_id)
-            
-            response = client.images.generate(
-                model=model,
-                prompt=prompt,
-                n=1,
-                size="1024x1024",
-                quality="standard"
-            )
-            
-            return {
-                "url": response.data[0].url,
-                "revised_prompt": getattr(response.data[0], 'revised_prompt', prompt)
-            }
-            
-        except Exception as e:
-            raise Exception(f"Image generation failed: {str(e)}")
+    def _calculate_anthropic_cost(self, model: str, usage) -> float:
+        """Calculate Anthropic API costs"""
+        # Anthropic pricing (would need current pricing)
+        pricing = {
+            'claude-sonnet-4-20250514': {'input': 0.003, 'output': 0.015},
+            'claude-3-sonnet-20240229': {'input': 0.003, 'output': 0.015}
+        }
+        
+        if model not in pricing:
+            return 0.0
+        
+        input_cost = (usage.input_tokens / 1000) * pricing[model]['input']
+        output_cost = (usage.output_tokens / 1000) * pricing[model]['output']
+        
+        return input_cost + output_cost
     
-    def transcribe_audio(self, user_id: str, audio_file_path: str) -> str:
+    def get_embedding(self, text: str, model: str = "text-embedding-3-small") -> List[float]:
+        """Get text embeddings for vector operations"""
+        if not self.openai_client:
+            raise Exception("OpenAI client not initialized")
+        
+        response = self.openai_client.embeddings.create(
+            model=model,
+            input=text
+        )
+        
+        return response.data[0].embedding
+    
+    def transcribe_audio(self, audio_file_path: str) -> str:
         """Transcribe audio using Whisper"""
-        try:
-            client = self.get_openai_client(user_id)
-            
-            with open(audio_file_path, "rb") as audio_file:
-                response = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file
-                )
-            
-            return response.text
-            
-        except Exception as e:
-            raise Exception(f"Audio transcription failed: {str(e)}")
+        if not self.openai_client:
+            raise Exception("OpenAI client not initialized")
+        
+        with open(audio_file_path, "rb") as audio_file:
+            response = self.openai_client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+        
+        return response.text
     
-    def text_to_speech(self, user_id: str, text: str, voice: str = "alloy") -> str:
+    def text_to_speech(self, text: str, voice: str = "alloy") -> bytes:
         """Convert text to speech"""
-        try:
-            client = self.get_openai_client(user_id)
-            
-            response = client.audio.speech.create(
-                model="tts-1",
-                voice=voice,
-                input=text
-            )
-            
-            # Save to temporary file
-            import tempfile
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
-                response.stream_to_file(tmp_file.name)
-                return tmp_file.name
-            
-        except Exception as e:
-            raise Exception(f"Text to speech failed: {str(e)}")
-    
-    def analyze_sentiment(self, user_id: str, text: str) -> Dict[str, Any]:
-        """Analyze sentiment of text"""
-        try:
-            client = self.get_openai_client(user_id)
-            
-            response = client.chat.completions.create(
-                model=self.default_openai_model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a sentiment analysis expert. Analyze the sentiment of the text and provide a rating from 1 to 5 stars and a confidence score between 0 and 1. Respond with JSON in this format: {'rating': number, 'confidence': number, 'sentiment': 'positive/negative/neutral'}"
-                    },
-                    {"role": "user", "content": text}
-                ],
-                response_format={"type": "json_object"}
-            )
-            
-            import json
-            result = json.loads(response.choices[0].message.content)
-            return {
-                "rating": max(1, min(5, round(result["rating"]))),
-                "confidence": max(0, min(1, result["confidence"])),
-                "sentiment": result.get("sentiment", "neutral")
-            }
-            
-        except Exception as e:
-            raise Exception(f"Sentiment analysis failed: {str(e)}")
-    
-    def summarize_text(self, user_id: str, text: str, max_length: int = 150) -> str:
-        """Summarize text"""
-        try:
-            client = self.get_openai_client(user_id)
-            
-            response = client.chat.completions.create(
-                model=self.default_openai_model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": f"Summarize the following text in approximately {max_length} words while maintaining key points:"
-                    },
-                    {"role": "user", "content": text}
-                ],
-                temperature=0.3
-            )
-            
-            return response.choices[0].message.content
-            
-        except Exception as e:
-            raise Exception(f"Text summarization failed: {str(e)}")
-    
-    def get_available_models(self, user_id: str) -> Dict[str, List[str]]:
-        """Get available models for user"""
-        models = {
-            "openai": [],
-            "anthropic": [],
-            "google": [],
-            "local": []
-        }
+        if not self.openai_client:
+            raise Exception("OpenAI client not initialized")
         
-        # Check if user has API keys configured
-        openai_key = APIKey.query.filter_by(user_id=user_id, provider='openai', is_active=True).first()
-        if openai_key or os.environ.get('OPENAI_API_KEY'):
-            models["openai"] = [
-                "gpt-4o",
-                "gpt-4",
-                "gpt-3.5-turbo",
-                "o1-preview",
-                "o1-mini"
-            ]
+        response = self.openai_client.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=text
+        )
         
-        anthropic_key = APIKey.query.filter_by(user_id=user_id, provider='anthropic', is_active=True).first()
-        if anthropic_key or os.environ.get('ANTHROPIC_API_KEY'):
-            models["anthropic"] = [
-                "claude-sonnet-4-20250514",
-                "claude-3-7-sonnet-20250219",
-                "claude-3-5-sonnet-20241022",
-                "claude-3-haiku-20240307"
-            ]
-        
-        return models
+        return response.content

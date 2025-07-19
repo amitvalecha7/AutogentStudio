@@ -1,119 +1,151 @@
 import os
-import logging
-from flask import session, redirect, url_for, flash
-from functools import wraps
-from app import db
-from models import User
+import json
+import hashlib
+import secrets
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union
 import mimetypes
+from urllib.parse import urlparse
 
-def get_current_user():
-    """Get current logged-in user"""
-    user_id = session.get('user_id')
-    if user_id:
-        return User.query.get(user_id)
-    return None
+def generate_secure_token(length: int = 32) -> str:
+    """Generate a secure random token"""
+    return secrets.token_urlsafe(length)
 
-def login_required(f):
-    """Decorator to require login for routes"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('Please log in to access this page.', 'warning')
-            return redirect(url_for('signin'))
-        return f(*args, **kwargs)
-    return decorated_function
+def generate_api_key() -> str:
+    """Generate a secure API key"""
+    return f"ask_{secrets.token_urlsafe(32)}"
 
-def admin_required(f):
-    """Decorator to require admin privileges"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        user = get_current_user()
-        if not user or not user.is_admin:
-            flash('Admin privileges required.', 'error')
-            return redirect(url_for('index'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def allowed_file(filename):
-    """Check if file type is allowed for upload"""
-    allowed_extensions = {
-        'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'svg',
-        'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-        'csv', 'json', 'xml', 'md', 'py', 'js', 'html',
-        'css', 'zip', 'tar', 'gz', 'mp3', 'wav', 'mp4',
-        'avi', 'mov', 'mkv'
+def hash_password(password: str, salt: Optional[str] = None) -> Dict[str, str]:
+    """Hash password with salt"""
+    if not salt:
+        salt = secrets.token_hex(32)
+    
+    # Use PBKDF2 with SHA256
+    password_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+    return {
+        'hash': password_hash.hex(),
+        'salt': salt
     }
-    
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
-def get_file_icon(filename):
-    """Get appropriate icon for file type"""
-    if not filename:
-        return 'fas fa-file'
-    
-    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-    
-    icon_map = {
-        'pdf': 'fas fa-file-pdf',
-        'doc': 'fas fa-file-word',
-        'docx': 'fas fa-file-word',
-        'xls': 'fas fa-file-excel',
-        'xlsx': 'fas fa-file-excel',
-        'ppt': 'fas fa-file-powerpoint',
-        'pptx': 'fas fa-file-powerpoint',
-        'txt': 'fas fa-file-alt',
-        'md': 'fas fa-file-alt',
-        'csv': 'fas fa-file-csv',
-        'json': 'fas fa-file-code',
-        'xml': 'fas fa-file-code',
-        'py': 'fas fa-file-code',
-        'js': 'fas fa-file-code',
-        'html': 'fas fa-file-code',
-        'css': 'fas fa-file-code',
-        'png': 'fas fa-file-image',
-        'jpg': 'fas fa-file-image',
-        'jpeg': 'fas fa-file-image',
-        'gif': 'fas fa-file-image',
-        'svg': 'fas fa-file-image',
-        'mp3': 'fas fa-file-audio',
-        'wav': 'fas fa-file-audio',
-        'mp4': 'fas fa-file-video',
-        'avi': 'fas fa-file-video',
-        'mov': 'fas fa-file-video',
-        'mkv': 'fas fa-file-video',
-        'zip': 'fas fa-file-archive',
-        'tar': 'fas fa-file-archive',
-        'gz': 'fas fa-file-archive'
-    }
-    
-    return icon_map.get(ext, 'fas fa-file')
+def verify_password(password: str, stored_hash: str, salt: str) -> bool:
+    """Verify password against stored hash"""
+    password_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+    return password_hash.hex() == stored_hash
 
-def format_file_size(size_bytes):
+def format_file_size(size_bytes: int) -> str:
     """Format file size in human readable format"""
     if size_bytes == 0:
-        return "0 B"
+        return "0B"
     
     size_names = ["B", "KB", "MB", "GB", "TB"]
     i = 0
+    
     while size_bytes >= 1024 and i < len(size_names) - 1:
         size_bytes /= 1024.0
         i += 1
     
     return f"{size_bytes:.1f} {size_names[i]}"
 
-def format_timestamp(timestamp):
-    """Format timestamp for display"""
-    if not timestamp:
-        return "Never"
+def get_file_type_icon(filename: str) -> str:
+    """Get icon class for file type"""
+    if not filename:
+        return 'fas fa-file'
     
-    from datetime import datetime, timedelta
+    file_ext = filename.lower().split('.')[-1] if '.' in filename else ''
     
-    now = datetime.utcnow()
-    diff = now - timestamp
+    icon_map = {
+        # Documents
+        'pdf': 'fas fa-file-pdf text-danger',
+        'doc': 'fas fa-file-word text-primary',
+        'docx': 'fas fa-file-word text-primary',
+        'xls': 'fas fa-file-excel text-success',
+        'xlsx': 'fas fa-file-excel text-success',
+        'ppt': 'fas fa-file-powerpoint text-warning',
+        'pptx': 'fas fa-file-powerpoint text-warning',
+        'txt': 'fas fa-file-alt',
+        'rtf': 'fas fa-file-alt',
+        
+        # Images
+        'jpg': 'fas fa-file-image text-info',
+        'jpeg': 'fas fa-file-image text-info',
+        'png': 'fas fa-file-image text-info',
+        'gif': 'fas fa-file-image text-info',
+        'svg': 'fas fa-file-image text-info',
+        'bmp': 'fas fa-file-image text-info',
+        'webp': 'fas fa-file-image text-info',
+        
+        # Audio
+        'mp3': 'fas fa-file-audio text-purple',
+        'wav': 'fas fa-file-audio text-purple',
+        'ogg': 'fas fa-file-audio text-purple',
+        'm4a': 'fas fa-file-audio text-purple',
+        'flac': 'fas fa-file-audio text-purple',
+        
+        # Video
+        'mp4': 'fas fa-file-video text-dark',
+        'avi': 'fas fa-file-video text-dark',
+        'mkv': 'fas fa-file-video text-dark',
+        'mov': 'fas fa-file-video text-dark',
+        'webm': 'fas fa-file-video text-dark',
+        
+        # Archives
+        'zip': 'fas fa-file-archive text-secondary',
+        'rar': 'fas fa-file-archive text-secondary',
+        '7z': 'fas fa-file-archive text-secondary',
+        'tar': 'fas fa-file-archive text-secondary',
+        'gz': 'fas fa-file-archive text-secondary',
+        
+        # Code
+        'py': 'fas fa-file-code text-success',
+        'js': 'fas fa-file-code text-warning',
+        'html': 'fas fa-file-code text-danger',
+        'css': 'fas fa-file-code text-primary',
+        'json': 'fas fa-file-code text-info',
+        'xml': 'fas fa-file-code text-secondary',
+        'sql': 'fas fa-file-code text-info',
+        'php': 'fas fa-file-code text-purple',
+        'java': 'fas fa-file-code text-danger',
+        'cpp': 'fas fa-file-code text-primary',
+        'c': 'fas fa-file-code text-primary',
+        'cs': 'fas fa-file-code text-success',
+        'go': 'fas fa-file-code text-info',
+        'rust': 'fas fa-file-code text-warning',
+        'rb': 'fas fa-file-code text-danger',
+        'swift': 'fas fa-file-code text-warning',
+        'kt': 'fas fa-file-code text-purple',
+        'ts': 'fas fa-file-code text-primary',
+    }
     
-    if diff.days > 7:
-        return timestamp.strftime("%Y-%m-%d")
+    return icon_map.get(file_ext, 'fas fa-file')
+
+def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
+    """Truncate text to specified length"""
+    if not text or len(text) <= max_length:
+        return text
+    
+    return text[:max_length - len(suffix)] + suffix
+
+def format_datetime(dt: datetime, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
+    """Format datetime object"""
+    if not dt:
+        return ""
+    
+    return dt.strftime(format_str)
+
+def time_ago(dt: datetime) -> str:
+    """Get human readable time ago string"""
+    if not dt:
+        return ""
+    
+    now = datetime.now()
+    diff = now - dt
+    
+    if diff.days > 365:
+        years = diff.days // 365
+        return f"{years} year{'s' if years > 1 else ''} ago"
+    elif diff.days > 30:
+        months = diff.days // 30
+        return f"{months} month{'s' if months > 1 else ''} ago"
     elif diff.days > 0:
         return f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
     elif diff.seconds > 3600:
@@ -125,216 +157,147 @@ def format_timestamp(timestamp):
     else:
         return "Just now"
 
-def validate_api_key(api_key, provider):
-    """Validate API key format"""
-    if not api_key:
-        return False
-    
-    # Basic validation rules for different providers
-    validation_rules = {
-        'openai': lambda k: k.startswith('sk-') and len(k) > 40,
-        'anthropic': lambda k: k.startswith('sk-ant-') and len(k) > 40,
-        'google': lambda k: len(k) > 30,
-        'aws': lambda k: len(k) > 15,
-        'azure': lambda k: len(k) > 20
-    }
-    
-    validator = validation_rules.get(provider.lower())
-    if validator:
-        return validator(api_key)
-    
-    return len(api_key) > 10  # Generic validation
-
-def sanitize_filename(filename):
-    """Sanitize filename for safe storage"""
-    import re
-    
-    # Remove path components
-    filename = os.path.basename(filename)
-    
-    # Replace potentially dangerous characters
-    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
-    
-    # Remove leading/trailing dots and spaces
-    filename = filename.strip('. ')
-    
-    # Ensure filename is not empty
-    if not filename:
-        filename = 'unnamed_file'
-    
-    return filename
-
-def generate_secure_token(length=32):
-    """Generate secure random token"""
-    import secrets
-    import string
-    
-    alphabet = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
-
-def is_safe_url(target):
-    """Check if URL is safe for redirect"""
-    from urllib.parse import urlparse, urljoin
-    from flask import request
-    
-    ref_url = urlparse(request.host_url)
-    test_url = urlparse(urljoin(request.host_url, target))
-    
-    return test_url.scheme in ('http', 'https') and \
-           ref_url.netloc == test_url.netloc
-
-def truncate_text(text, max_length=100):
-    """Truncate text to specified length"""
-    if not text:
-        return ""
-    
-    if len(text) <= max_length:
-        return text
-    
-    return text[:max_length - 3] + "..."
-
-def get_client_ip():
-    """Get client IP address"""
-    from flask import request
-    
-    # Check for forwarded headers first
-    if request.environ.get('HTTP_X_FORWARDED_FOR'):
-        return request.environ['HTTP_X_FORWARDED_FOR'].split(',')[0].strip()
-    elif request.environ.get('HTTP_X_REAL_IP'):
-        return request.environ['HTTP_X_REAL_IP']
-    else:
-        return request.environ.get('REMOTE_ADDR', 'unknown')
-
-def log_security_event(event_type, details, user_id=None):
-    """Log security-related events"""
-    security_log = {
-        'event_type': event_type,
-        'details': details,
-        'user_id': user_id,
-        'ip_address': get_client_ip(),
-        'timestamp': datetime.utcnow().isoformat(),
-        'user_agent': request.headers.get('User-Agent', 'unknown')
-    }
-    
-    logging.warning(f"Security Event: {security_log}")
-
-def rate_limit_key(user_id=None):
-    """Generate rate limit key"""
-    if user_id:
-        return f"rate_limit:user:{user_id}"
-    else:
-        return f"rate_limit:ip:{get_client_ip()}"
-
-def check_rate_limit(key, limit=100, window=3600):
-    """Check if rate limit is exceeded"""
-    # This would integrate with Redis in production
-    # For now, return False (not rate limited)
-    return False
-
-def mask_sensitive_data(data, mask_char='*'):
-    """Mask sensitive data for logging"""
-    if not data:
-        return data
-    
-    if len(data) <= 8:
-        return mask_char * len(data)
-    
-    # Show first 4 and last 4 characters
-    return data[:4] + mask_char * (len(data) - 8) + data[-4:]
-
-def validate_json_schema(data, schema):
-    """Validate JSON data against schema"""
+def extract_domain(url: str) -> str:
+    """Extract domain from URL"""
     try:
-        import jsonschema
-        jsonschema.validate(data, schema)
+        parsed = urlparse(url)
+        return parsed.netloc
+    except:
+        return ""
+
+def is_safe_url(url: str, allowed_hosts: Optional[List[str]] = None) -> bool:
+    """Check if URL is safe for redirects"""
+    try:
+        parsed = urlparse(url)
+        
+        # Must be HTTP or HTTPS
+        if parsed.scheme not in ['http', 'https']:
+            return False
+        
+        # If allowed hosts specified, check against them
+        if allowed_hosts and parsed.netloc not in allowed_hosts:
+            return False
+        
         return True
     except:
         return False
 
-def get_system_stats():
-    """Get system statistics"""
-    import psutil
+def generate_filename(original_filename: str, prefix: str = "", suffix: str = "") -> str:
+    """Generate safe filename with optional prefix and suffix"""
+    if not original_filename:
+        return f"{prefix}file{suffix}"
     
-    return {
-        'cpu_percent': psutil.cpu_percent(),
-        'memory_percent': psutil.virtual_memory().percent,
-        'disk_percent': psutil.disk_usage('/').percent,
-        'load_average': psutil.getloadavg() if hasattr(psutil, 'getloadavg') else [0, 0, 0]
-    }
-
-def create_audit_log(action, resource, details=None):
-    """Create audit log entry"""
-    user = get_current_user()
-    audit_entry = {
-        'action': action,
-        'resource': resource,
-        'user_id': user.id if user else None,
-        'username': user.username if user else 'anonymous',
-        'ip_address': get_client_ip(),
-        'timestamp': datetime.utcnow().isoformat(),
-        'details': details or {}
-    }
+    # Remove dangerous characters
+    safe_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+    filename = ''.join(c for c in original_filename if c in safe_chars)
     
-    logging.info(f"Audit Log: {audit_entry}")
-    return audit_entry
+    # Add prefix and suffix
+    if '.' in filename:
+        name, ext = filename.rsplit('.', 1)
+        return f"{prefix}{name}{suffix}.{ext}"
+    else:
+        return f"{prefix}{filename}{suffix}"
 
-def send_notification(user_id, message, notification_type='info'):
-    """Send notification to user"""
-    # This would integrate with a notification service in production
-    logging.info(f"Notification for user {user_id}: {message} (type: {notification_type})")
-
-def generate_qr_code(data):
-    """Generate QR code for data"""
+def calculate_file_hash(file_path: str, algorithm: str = "md5") -> str:
+    """Calculate hash of file contents"""
+    hash_algo = hashlib.new(algorithm)
+    
     try:
-        import qrcode
-        from io import BytesIO
-        import base64
-        
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(data)
-        qr.make(fit=True)
-        
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        buffer = BytesIO()
-        img.save(buffer, format='PNG')
-        buffer.seek(0)
-        
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-        return f"data:image/png;base64,{img_str}"
-    except ImportError:
-        logging.warning("qrcode library not installed")
-        return None
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_algo.update(chunk)
+        return hash_algo.hexdigest()
+    except Exception:
+        return ""
 
-def backup_database():
-    """Create database backup"""
+def parse_user_agent(user_agent: str) -> Dict[str, str]:
+    """Parse user agent string"""
+    result = {
+        'browser': 'Unknown',
+        'os': 'Unknown',
+        'device': 'Desktop'
+    }
+    
+    if not user_agent:
+        return result
+    
+    ua = user_agent.lower()
+    
+    # Detect browser
+    if 'chrome' in ua and 'safari' in ua:
+        result['browser'] = 'Chrome'
+    elif 'firefox' in ua:
+        result['browser'] = 'Firefox'
+    elif 'safari' in ua and 'chrome' not in ua:
+        result['browser'] = 'Safari'
+    elif 'edge' in ua:
+        result['browser'] = 'Edge'
+    elif 'opera' in ua:
+        result['browser'] = 'Opera'
+    
+    # Detect OS
+    if 'windows' in ua:
+        result['os'] = 'Windows'
+    elif 'mac os' in ua or 'macos' in ua:
+        result['os'] = 'macOS'
+    elif 'linux' in ua:
+        result['os'] = 'Linux'
+    elif 'android' in ua:
+        result['os'] = 'Android'
+        result['device'] = 'Mobile'
+    elif 'ios' in ua or 'iphone' in ua or 'ipad' in ua:
+        result['os'] = 'iOS'
+        result['device'] = 'Mobile' if 'iphone' in ua else 'Tablet'
+    
+    # Detect mobile
+    mobile_indicators = ['mobile', 'android', 'iphone', 'ipod', 'blackberry', 'windows phone']
+    if any(indicator in ua for indicator in mobile_indicators):
+        result['device'] = 'Mobile'
+    
+    return result
+
+def clean_html(html: str) -> str:
+    """Remove HTML tags from text"""
+    import re
+    clean = re.compile('<.*?>')
+    return re.sub(clean, '', html)
+
+def generate_slug(text: str) -> str:
+    """Generate URL-friendly slug from text"""
+    import re
+    # Convert to lowercase and replace spaces with hyphens
+    slug = text.lower().strip()
+    slug = re.sub(r'[^\w\s-]', '', slug)
+    slug = re.sub(r'[\s_-]+', '-', slug)
+    slug = slug.strip('-')
+    return slug
+
+def merge_dictionaries(*dicts: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge multiple dictionaries"""
+    result = {}
+    for d in dicts:
+        if d:
+            result.update(d)
+    return result
+
+def deep_get(dictionary: Dict[str, Any], keys: str, default: Any = None) -> Any:
+    """Get nested dictionary value using dot notation"""
+    keys_list = keys.split('.')
+    for key in keys_list:
+        if isinstance(dictionary, dict) and key in dictionary:
+            dictionary = dictionary[key]
+        else:
+            return default
+    return dictionary
+
+def format_currency(amount: float, currency: str = "USD", symbol: str = "$") -> str:
+    """Format currency amount"""
+    return f"{symbol}{amount:,.2f} {currency}"
+
+def validate_json(json_string: str) -> Dict[str, Any]:
+    """Validate and parse JSON string"""
     try:
-        import subprocess
-        from datetime import datetime
-        
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        backup_file = f"backup_autogent_studio_{timestamp}.sql"
-        
-        # This would run actual pg_dump in production
-        logging.info(f"Database backup created: {backup_file}")
-        return backup_file
-    except Exception as e:
-        logging.error(f"Database backup failed: {str(e)}")
-        return None
-
-def cleanup_temp_files():
-    """Clean up temporary files"""
-    import glob
-    import time
-    
-    temp_pattern = "/tmp/autogent_*"
-    current_time = time.time()
-    
-    for filepath in glob.glob(temp_pattern):
-        try:
-            file_age = current_time - os.path.getctime(filepath)
-            if file_age > 86400:  # 24 hours
-                os.remove(filepath)
-                logging.info(f"Cleaned up temp file: {filepath}")
-        except Exception as e:
-            logging.error(f"Error cleaning temp file {filepath}: {str(e)}")
+        data = json.loads(json_string)
+        return {'valid': True, 'data': data, 'error': None}
+    except json.JSONDecodeError as e:
+        return {'valid': False, 'data': None, 'error': str(e)}
