@@ -54,7 +54,7 @@ class ChatMessage(db.Model):
     session_id = db.Column(String(255), ForeignKey('chat_sessions.id'), nullable=False)
     role = db.Column(String(20), nullable=False)  # user, assistant, system
     content = db.Column(Text, nullable=False)
-    metadata = db.Column(JSON, default=dict)
+    message_metadata = db.Column(JSON, default=dict)
     tokens_used = db.Column(Integer, default=0)
     cost = db.Column(Float, default=0.0)
     created_at = db.Column(DateTime, default=datetime.utcnow)
@@ -75,7 +75,7 @@ class File(db.Model):
     storage_path = db.Column(Text, nullable=False)
     is_processed = db.Column(Boolean, default=False)
     processing_status = db.Column(String(50), default='pending')
-    metadata = db.Column(JSON, default=dict)
+    file_metadata = db.Column(JSON, default=dict)
     created_at = db.Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -108,8 +108,8 @@ class FileEmbedding(db.Model):
     chunk_text = db.Column(Text, nullable=False)
     chunk_index = db.Column(Integer, nullable=False)
     embedding_model = db.Column(String(100), nullable=False)
-    embedding_vector = db.Column(db.ARRAY(Float))  # pgvector
-    metadata = db.Column(JSON, default=dict)
+    embedding_vector = db.Column(Text)  # Store as JSON string for SQLite compatibility
+    embedding_metadata = db.Column(JSON, default=dict)
     created_at = db.Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -335,7 +335,7 @@ class UsageMetrics(db.Model):
     metric_type = db.Column(String(100), nullable=False)
     metric_name = db.Column(String(255), nullable=False)
     value = db.Column(Float, nullable=False)
-    metadata = db.Column(JSON, default=dict)
+    metric_metadata = db.Column(JSON, default=dict)
     timestamp = db.Column(DateTime, default=datetime.utcnow)
 
 # Workflow Orchestration Models

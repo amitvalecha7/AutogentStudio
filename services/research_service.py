@@ -818,3 +818,54 @@ def discover_insights(research_data: Dict[str, Any]) -> Dict[str, Any]:
         logging.error(f"Error discovering insights: {e}")
         return {'error': str(e)}
 
+class ResearchService:
+    """Main research service that coordinates all research activities"""
+    
+    def __init__(self):
+        self.hypothesis_generator = HypothesisGenerator()
+        self.experiment_designer = ExperimentDesigner()
+        self.insight_engine = ResearchInsightEngine()
+    
+    def initialize_research_project(self, project) -> Dict[str, Any]:
+        """Initialize a new research project with automated setup"""
+        try:
+            # Generate initial hypothesis if not provided
+            if not project.hypothesis:
+                hypothesis_result = self.hypothesis_generator.generate_hypothesis(
+                    project.research_area, 
+                    project.description
+                )
+                project.hypothesis = hypothesis_result.get('hypothesis', '')
+            
+            # Design initial experiment
+            experiment_design = self.experiment_designer.design_experiment(
+                project.hypothesis,
+                {'budget': 1000, 'time_limit': 30}  # Default constraints
+            )
+            
+            return {
+                'project_id': project.id,
+                'hypothesis': project.hypothesis,
+                'experiment_design': experiment_design,
+                'status': 'initialized'
+            }
+        except Exception as e:
+            logging.error(f"Error initializing research project: {e}")
+            return {'error': str(e)}
+    
+    def generate_hypothesis(self, research_area: str, context: str = "") -> Dict[str, Any]:
+        """Generate a research hypothesis"""
+        return self.hypothesis_generator.generate_hypothesis(research_area, context)
+    
+    def design_experiment(self, hypothesis: str, constraints: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Design an experiment for a hypothesis"""
+        return self.experiment_designer.design_experiment(hypothesis, constraints)
+    
+    def analyze_results(self, experiment_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze experiment results"""
+        return analyze_results(experiment_data)
+    
+    def discover_insights(self, research_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Discover insights from research data"""
+        return self.insight_engine.discover_insights(research_data)
+
