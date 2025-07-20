@@ -41,3 +41,19 @@ def decrypt_api_key(encrypted_key: str) -> str:
     except Exception as e:
         print(f"Error decrypting API key: {e}")
         return ""
+
+def encrypt_api_keys(api_keys: dict) -> dict:
+    """Encrypt multiple API keys for secure storage"""
+    encrypted_keys = {}
+    for provider, key in api_keys.items():
+        if key:
+            encrypted_keys[provider] = encrypt_api_key(key)
+    return encrypted_keys
+
+def decrypt_api_keys(encrypted_keys: dict) -> dict:
+    """Decrypt multiple API keys for use"""
+    decrypted_keys = {}
+    for provider, encrypted_key in encrypted_keys.items():
+        if encrypted_key:
+            decrypted_keys[provider] = decrypt_api_key(encrypted_key)
+    return decrypted_keys
